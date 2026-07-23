@@ -95,7 +95,7 @@ replaying each object's **source** (guest closures aren't serializable) + a boun
 
 ## The plan
 - `docs/roadmap.md` — the living plan. **Read it first.** M0/M1/Stabilize/M2/M3/M4
-  are marked done; M5 + Phase 2 (UI) are ahead.
+  are marked done; M5d + Phase 2 (the web app, W0–W4) are ahead.
 - `docs/m4-plan.md` — the executed file-level M4 plan (spatial verbs + manifest).
 - `docs/stabilize-plan.md` — the executed file-level Stabilize demolition plan.
 
@@ -107,13 +107,50 @@ replay harness (the free `M5d-code` half is buildable without a key; a fixture r
 proves the seam), then ONE billed `record`-style session captured as the cassette
 (replayed free forever after). **No API key / SDK / billed path exists in the repo —
 building the SDK client and running the session both need explicit user approval.** See
-roadmap M5 + `docs/m5-plan.md` M5d. After M5: Phase 2 (UI, deferred by decision #4).
+roadmap M5 + `docs/m5-plan.md` M5d.
+
+**ALSO NEXT — Phase 2 (the web app), and it is NOT blocked by M5d.** Decision #4 (UI
+stack) was **resolved 2026-07-23**: **React + Vite SPA, client-only, React-native
+views** (roadmap decisions #5–#7). W0 (stand up `packages/web`, fold a hardcoded log
+in-browser) can start today; only **W3** (the in-app LLM turn loop) waits on M5d. See
+roadmap "Phase 2 — the web app", milestones W0–W4.
+
+## Phase 2 — what to know before touching the web app
+**The engine does not change.** `core`/`substrate`/`objects`/`sandbox`/`workspace`/
+`parse`/`copilot` run in the browser as-is: the QuickJS host already builds its context
+from the single-file wasm variant, and `sandbox/node.ts` is the only Node-specific
+module — **it must stay out of the bundle**. The app is a shell, not a port. Client-only
+is the stateless-POC decision honoured literally: no server, no session, static deploy.
+
+**The decision-#7 trap — do not fall into it.** "Rebuild views as React components"
+means replace **only** the DOM half. `View` splits model from DOM: constructors build
+handles/subscriptions (node-testable), and `render(doc)` is a `protected abstract`
+called **only** by `mount()`. The view *models* stay, because `sceneIndex(stage)`
+(`objects/src/scene.ts`) builds `Workspace.objects` — what every copilot tool resolves
+against and what `sceneBrief`/`scopedManifest` scope — from `stage.registered` **plus
+`stage.views` and each `v.elements`**. Delete the view objects and the LLM silently
+loses addressable handles; nothing errors, the manifest just shrinks. So: **construct
+views as today, never call `mount()`**, and let React render from the same live objects.
+W1 carries a guard test pinning `Workspace.objects` identical with and without the app.
+
+**The reactive bridge.** `Slot`/`Collection`/`Derived`/`Incremental` all expose
+`subscribe(fn) → Unsubscribe` — exactly `useSyncExternalStore`'s shape. But `Live<T>`
+guarantees only `.value` (it extends `Handle`), so `useLive` must pull `.value` and
+subscribe only where the backing node supports it.
+
+**The cheap tier stays the loop.** React components are testable headless (jsdom +
+Testing Library) against the same folded workspaces. Reserve a real browser only for the
+wasm-boot smoke test — no browser on the critical path, same as Phase 1.
 
 ## Locked decisions
 - **No CAS.** The LLM reasons (fallibly); the engine makes math manipulable/visible/
   probeable; claims are **evidence-typed** (`exact-comparison`/`sampled`/
   `authored-predicate`) so a model can't narrate an opinion as a proof.
-- **Stateless POC** — the workspace is `fold(log)`; no server session.
+- **Stateless POC** — the workspace is `fold(log)`; no server session. Phase 2's
+  client-only web app (decision #6) is this decision carried into the browser: a
+  key-holding proxy would be the first thing forcing a server — defer it to W3.
+- **UI stack (decisions #5–#7, 2026-07-23)** — **React + Vite SPA**, **client-only**,
+  **React-native views over kept view models**. Supersedes decision #4's deferral.
 - **Shed, don't hoard** — discipline libraries and lesson concepts were deleted
   deliberately. Don't reintroduce them to "restore coverage"; add coverage the lean
   substrate can express.

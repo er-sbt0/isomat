@@ -23,7 +23,7 @@ lesson log → an authorship-tagged N-verb co-edit log).
 | 1 | Bootstrap | **Lift `core` + `host` verbatim** from math-ai; cherry-pick `library` (live, claim, numeric, views, formula). Build `workspace` / `parse` / `copilot` fresh. |
 | 2 | Phase-1 target | **The spatial co-edit workspace** — full verb set, fold→positioned objects, selective manifest. Ambitious; front-loads the redesign. |
 | 3 | Parser | **mathjs for parse + numeric eval; own addressable span tree** wrapping its AST. Symbolic APIs fenced off (the no-CAS line). |
-| 4 | UI / app stack | **Deferred.** Phase 1 proves the spatial engine **headless** in the cheap test tier; the browser canvas is Phase 2. |
+| 4 | UI / app stack | **Deferred in Phase 1** — the engine is proved **headless** in the cheap test tier. **RESOLVED 2026-07-23**: React + Vite, client-only, native React views. See Phase 2 decisions #5–#7. |
 
 ## The reuse boundary
 
@@ -325,17 +325,95 @@ typecheck 8/8); the billed flagship cassette (M5d) is the one remaining GATED st
   billed path exists. Free `M5d-code` (harness + replay over a fixture) is buildable
   without a key; the one billed `record` session is the only paid step in the repo.
 
-## Phase 2 — deferred (revisit when M5 lands)
-- Decide the UI/app stack (decision #4).
-- Browser canvas over the `Workspace`; drag/layout surface.
+## Phase 2 — the web app (decision #4 RESOLVED 2026-07-23)
+
+Phase 1 proved `fold(log)` headless; Phase 2 gives it a surface. **The engine does not
+change.** `core` / `substrate` / `objects` / `sandbox` / `workspace` / `parse` /
+`copilot` run in the browser as-is — the QuickJS host already builds its context from
+the single-file wasm variant, and `sandbox/node.ts` is the only Node-specific module
+(it must stay out of the bundle). Phase 2 is a **shell**, not a port.
+
+### Decisions (locked 2026-07-23)
+
+| # | Decision | Choice |
+|---|---|---|
+| 5 | UI stack | **React + Vite SPA.** New package `packages/web`. Vite handles the wasm asset; React refs host any imperative DOM we still need. |
+| 6 | Runtime | **Client-only.** `fold` + QuickJS run in the browser; no server, no session — this is the stateless POC honoured literally. Deploys as static files. LLM (when it lands) is bring-your-own-key client-side, or a proxy is added later as the *only* server. |
+| 7 | Rendering | **Rebuild views as React-native components** reading the live objects directly — `<Plot>`, `<Claim>`, `<Formula>`, `<Readout>`, `<Note>`. The existing SVG `render(doc)` output is not mounted. |
+
+### Decision #7 has a hard constraint — read this before writing components
+
+`View` splits **model** from **DOM**: constructors build handles/protocol members/
+subscriptions (node-testable); `render(doc)` — a `protected abstract`, called only by
+`mount()` — builds SVG. Decision #7 replaces **only the DOM half**.
+
+**The view models stay.** `sceneIndex(stage)` (`objects/src/scene.ts`) builds
+`Workspace.objects` — what every copilot tool resolves against and what `sceneBrief` /
+`scopedManifest` scope — from `stage.registered` **plus `stage.views` and each
+`v.elements`**. Deleting view objects in favour of bare React components would silently
+shrink the LLM's addressable scene: handles the model could previously name would stop
+existing. So: **construct views as today, never call `mount()`, and let React render
+from the same live objects.**
+
+Corollary: `PlotView`/`ClaimView`/`FormulaView`/`ReadoutView`/`NoteView` remain built
+and tested (they are also `cell/`'s renderers). Whether the SVG half is eventually shed
+is a *later* call, not part of Phase 2.
+
+### The reuse boundary (Phase 2)
+
+| Reuse unchanged | Build fresh |
+|---|---|
+| `workspace` — `fold`/`commit`/`coalesce`/`SessionIds`/checkpoints | `packages/web` — the React + Vite app shell, routing, layout |
+| `copilot` — `runTurn`, `classify`, the 11 tools, `sceneBrief`, `ModelClient`/`ScriptedClient` | The **reactive bridge**: `Slot`/`Collection`/`Derived`/`Incremental` all expose `subscribe(fn) → Unsubscribe` — exactly `useSyncExternalStore`'s shape. `Live<T>` guarantees only `.value` (it extends `Handle`), so the bridge must pull `.value` and subscribe only where the backing node supports it. |
+| `parse` — `parseExpr`/`introduceExpr`/`resolveSpan` | React view components (`<Plot>`, `<Claim>`, …) per decision #7 |
+| `sandbox` — bridge/prelude/budget/lint (browser wasm context) | Interaction surface: drag/position → `MoveAct`, sliders → `SetInputAct`, coalescing on drag |
+| `objects` — live/param/claim/formula + **view models** (see constraint above) | Evidence presentation — showing `exact-comparison` / `sampled` / `authored-predicate` so the *type* of evidence is visible, not just the verdict |
+
+### Milestones
+
+#### W0 — app shell + engine in the browser
+Stand up `packages/web` (React + Vite) and prove the engine runs client-side.
+- New workspace package; Vite config serving the QuickJS single-file wasm; `sandbox/node.ts` verified absent from the bundle.
+- Hardcode a small log → `fold` → dump `Workspace.objects` to the DOM as text.
+- **Exit:** app boots, a QuickJS-backed fold completes in the browser, object ids render.
+- **Proves:** the whole Phase-1 substrate is browser-viable with zero engine edits — the load-bearing assumption of decisions #5/#6.
+
+#### W1 — the reactive bridge + native views
+- `useLive(handle)` over `useSyncExternalStore`, honouring the `Live<T>`-has-no-`subscribe` caveat above.
+- `<Plot>` `<Readout>` `<Formula>` `<Claim>` `<Note>` reading live objects; views still constructed (never mounted) so `sceneIndex` stays whole.
+- **Exit:** a folded workspace renders as positioned React components; an out-of-band `setValue` re-renders exactly the dependent components.
+- **Guard:** a test asserting `Workspace.objects` for a given log is **identical** with and without the app — the decision-#7 trap, pinned.
+
+#### W2 — interactive co-edit (the human half)
+- Sliders/drag → `SetInputAct` / `MoveAct` through `commit`; `coalesce` on drag.
+- Expression input → `parseExpr` → `introduceExpr` → `IntroduceAct`.
+- Retire/replace affordances; undo as log truncation (free, given `fold`).
+- **Exit:** a user can build and rearrange a workspace in the browser with no LLM.
+
+#### W3 — the LLM turn loop (the other author)
+- Question box → `runTurn`; the classifier fast-path stays free.
+- Assistant acts land authorship-tagged and visibly distinct from the user's.
+- Evidence-typed verdicts surfaced *as types*, per the locked no-CAS decision.
+- Client-side key entry per decision #6; **gated/billed — needs explicit approval**, and blocked on M5d landing the real `AnthropicClient`.
+- **Exit:** the canonical *"is d/dx of f = g?"* flow runs in the app, `ScriptedClient` first.
+
+#### W4 — later / not scheduled
 - Playback-in-a-cell: `Player` scoped to a cell sub-world (the `timeline` lifted in M0).
 - `qed` / `undergrad` consuming isomat as the shared substrate.
+- Persistence/sharing of logs (would force reconsidering decision #6).
+
+### Testing discipline in Phase 2
+The cheap tier stays the loop. React components are testable headless (jsdom +
+Testing Library) against the same folded workspaces — **no browser on the critical
+path**, matching Phase 1. Reserve a real browser only for the wasm-boot smoke test.
 
 ## Open decisions (not yet forced)
 - **Checkpoint trigger policy** — N acts vs byte budget vs turn boundary. Decide with real data at M4.
 - **mathjs fence durability** — if the symbolic boundary proves leaky, swap to a lighter numeric lib.
 - **Substrate sharing model** — do `qed`/`undergrad` import isomat as a package or copy it (divergent-stacks, at the substrate level)?
-- **UI/app stack** — deferred to Phase 2 by decision #4.
+- ~~**UI/app stack**~~ — **decided 2026-07-23** (Phase 2, #5–#7): React + Vite SPA, client-only, React-native views over kept view models.
+- **Shedding the SVG view DOM** — decision #7 leaves `render(doc)` unused by the app but still used by `cell/` and its tests. Revisit only after W1.
+- **Server (and thus persistence)** — decision #6 is client-only. A key-holding proxy is the first thing that would force a server; defer until W3 makes it concrete.
 
 ## Testing discipline (carried over from math-ai)
 - **The cheap tier is the loop:** headless vitest + `typecheck`. Every Phase-1 exit is provable there — no browser on the critical path.
