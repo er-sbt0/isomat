@@ -99,15 +99,20 @@ replaying each object's **source** (guest closures aren't serializable) + a boun
 - `docs/m4-plan.md` — the executed file-level M4 plan (spatial verbs + manifest).
 - `docs/stabilize-plan.md` — the executed file-level Stabilize demolition plan.
 
-**NEXT: M5d** — the one remaining M5 step, **BILLED and GATED**. M5a–c (the probe
-toolset + the canonical sampled-evidence flow + the symmetric-log hammer) are DONE and
-committed; the headless Phase-1 exit is met. M5d is the flagship real-Claude cassette:
-a real `AnthropicClient` behind the existing `ModelClient` seam + a cassette record/
-replay harness (the free `M5d-code` half is buildable without a key; a fixture replay
-proves the seam), then ONE billed `record`-style session captured as the cassette
-(replayed free forever after). **No API key / SDK / billed path exists in the repo —
-building the SDK client and running the session both need explicit user approval.** See
-roadmap M5 + `docs/m5-plan.md` M5d.
+**NEXT: M5d-record** — the ONE remaining billed step, still **GATED**. Everything it
+needs now exists: **M5d-code is DONE** (`c22bb0b`) — the real `AnthropicClient` behind
+the `ModelClient` seam, plus the cassette record/replay harness — built and tested with
+**zero API calls and no key**. What remains is running one real session through
+`RecordingClient` and committing the captured cassette, replayed free forever after.
+**That step spends money and needs explicit approval.** Put the key in a gitignored
+`.env.local`; never in the repo, never pasted into a prompt.
+
+**The SDK boundary — do not weaken it.** `AnthropicClient` lives at
+`@isomat/copilot/anthropic` and is deliberately **off the copilot barrel**, exactly like
+`@isomat/sandbox/node`: `@isomat/web` imports the barrel, and pulling the Anthropic SDK
+into a client-only bundle would ship a Node-shaped HTTP client to the page and invite an
+API key in browser code. Three fence tests enforce it. The cassette half imports no SDK,
+so replay stays free and browser-safe. See roadmap M5 + `docs/m5-plan.md` M5d.
 
 **ALSO NEXT — Phase 2 (the web app), and it is NOT blocked by M5d.** Decision #4 (UI
 stack) was **resolved 2026-07-23**: **React + Vite SPA, client-only, React-native

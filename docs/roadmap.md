@@ -319,11 +319,19 @@ typecheck 8/8); the billed flagship cassette (M5d) is the one remaining GATED st
   every verb + probe) folds deterministically; no half-apply (rejected acts leave the
   log reference intact); `byId` robust; ids stable under `edit-span`/`replace`; an
   `everyNActs(50)` checkpoint (M4d) over the long log folds to the same workspace.
-- **M5d — BILLED, GATED (not started; needs explicit user approval + an API key).** A
-  real `AnthropicClient` behind the `ModelClient` seam + a cassette record/replay
-  harness + one captured flagship cassette. Verified absent today: no SDK, no key, no
-  billed path exists. Free `M5d-code` (harness + replay over a fixture) is buildable
-  without a key; the one billed `record` session is the only paid step in the repo.
+- **M5d-code ✅ DONE (2026-07-24, `c22bb0b`) — free, zero billed calls.** The real
+  `AnthropicClient` behind the `ModelClient` seam (`@isomat/copilot/anthropic`,
+  deliberately OFF the barrel so the SDK never enters a browser bundle) plus the
+  cassette record/replay harness (`CassetteClient`/`RecordingClient`, SDK-free and in
+  the barrel). Proven with a hand-authored cassette driving the real `runTurn` through
+  the canonical flow, and the whole client translation tested against an injected stub
+  SDK. No API call was made; no key was read or stored. Three fence tests keep the SDK
+  out of `web` and off the copilot barrel; a schema-coverage test makes "added a tool
+  without a schema" a build failure.
+- **M5d-record — BILLED, STILL GATED (needs explicit approval + a key).** The one paid
+  step: run a real session through `RecordingClient` and commit the captured cassette,
+  replayed free forever after. Everything it needs now exists. Put the key in a
+  gitignored `.env.local` — never in the repo, never in a prompt.
 
 ## Phase 2 — the web app (decision #4 RESOLVED 2026-07-23)
 
