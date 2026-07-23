@@ -9,9 +9,10 @@
  * `SetInputAct` / `AuthorAct`. This is where "4c dark → live" is paid — the
  * executor ↔ workspace seam.
  *
- * M2b (next) adds the loop driver + intent classifier + a `ModelClient` seam
- * around this executor. The tools themselves throw nothing across the boundary,
- * so the loop reads every outcome — success or typed error — as data.
+ * M2b adds the loop around this executor: `runTurn` (the headless co-edit turn),
+ * an intent-classifier fast-path, a scene brief, and the `ModelClient` seam with
+ * a free `ScriptedClient` fake. The tools themselves throw nothing across the
+ * boundary, so the loop reads every outcome — success or typed error — as data.
  */
 
 export {
@@ -39,3 +40,20 @@ export type {
   WhyChangedEntry,
   WriteOutcome,
 } from './tools.js';
+
+// ── M2b: the loop ──
+export { runTurn } from './turn.js';
+export type { TurnOutcome, ManipulatedOutcome, AgenticOutcome, TurnStep, TurnDeps } from './turn.js';
+export { classify } from './classify.js';
+export type { Manipulation } from './classify.js';
+export { sceneBrief } from './brief.js';
+export { ScriptedClient, SYSTEM_PROMPT, TOOL_SPECS } from './client.js';
+export type {
+  ModelClient,
+  ModelRequest,
+  ModelResponse,
+  ModelMessage,
+  ToolSpec,
+  ToolResultMsg,
+  Evidence,
+} from './client.js';

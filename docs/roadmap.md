@@ -166,21 +166,41 @@ against a QuickJS fold — but speaking the superseded `ConversationLog`. So M2 
   (`tools.test.ts`) over an in-process `foldLog`; `appendFragment` commits through
   `commit`; the live workspace never moves under a probe. **typecheck 7/7, 332 tests.**
 
-#### M2b — the loop driver + classifier (next)
-- A headless turn fn: `(log, question, client) → { answer | manipulated | newLog }`,
-  a `ModelClient` seam, and an intent-classifier fast-path.
-- **Open decision (paused):** the canned tool-call sequence that drives the agentic
-  turn — hand-authored **scripted fake client** (free, deterministic) vs a **billed
-  real-Claude cassette** (recorded once, replayed free). Both prove the seam; the
-  billed one additionally proves a real model *chooses* these tools. Leaning
-  scripted-fake for M2b, deferring the billed cassette to M5's flagship session.
-- **Exit:** classifier fast-path manipulates a param with **zero** model calls; a
-  canned agentic turn probes (`evalAt`/`counterfactual`) then answers with
-  evidence-typing, replayed free.
-- **Proves:** the loop ↔ executor seam.
+#### M2b — the loop driver + classifier ✅ DONE (2026-07-23)
+Decision taken: **scripted fake client** (free, deterministic), billed real-Claude
+cassette deferred to M5's flagship session. What landed in `packages/copilot`:
+- `runTurn(log, question, client, deps) → TurnOutcome` — the headless co-edit turn,
+  two paths: a `manipulated` fast-path and an `agentic` loop. `TurnOutcome` carries
+  the advanced log + the answer (generalizes the plan's `{ answer | manipulated |
+  newLog }`).
+- `classify.ts` — the intent fast-path: recognizes a PURE manipulation command
+  ("set spin to 2", "spin = -1") against the live scene's params and commits a
+  `set-input` with **zero model calls**. Deliberately narrow + anchored so a
+  compound question ("set spin to 2 and explain") falls through to the model rather
+  than being silently manipulated.
+- `client.ts` — the `ModelClient` seam (tool-use-API-shaped: a response is
+  `tool-calls` or a final `answer`), a free `ScriptedClient` fake (a canned move
+  sequence, operationally a replayed cassette), plus `TOOL_SPECS` + `SYSTEM_PROMPT`.
+  A real Anthropic client (M5) drops into the same seam unchanged.
+- `brief.ts` — `sceneBrief(scene)`: the terse id-addressable scene manifest the
+  loop hands the model (the M4 `scopedManifest` precursor; same one-line-per-object
+  shape, unbounded for now). Named `brief`, not `manifest`, to stay fence-legal.
+- The loop ↔ executor seam: reads resolve against the live scene, probes fold
+  throwaway copies, writes `commit` and advance the log, and the live scene
+  **re-folds when the log changed** so a later read sees a model's own write.
+- **Evidence discipline enforced structurally:** an answer's declared evidence
+  (`sampled`/`exact-comparison`/`authored-predicate`) is cross-checked against the
+  probes that actually ran (`evidenceGrounded`) — the loop cannot launder an
+  opinion into a proof it never probed for.
+- **Exit (met):** classifier fast-path manipulates with zero model calls; a
+  scripted agentic turn runs counterfactual → evidence-typed answer, the probe
+  result provably fed back, evidence grounded; a model-authored `setInput` commits
+  and the re-folded live scene reflects it; a runaway model is cut off as
+  `truncated`. **typecheck 7/7, 347 tests** (+15: 9 classify, 6 turn).
 
 **Proves (M2 overall):** the executor ↔ workspace seam — where "4c dark → live" is
-actually paid (M2a) — then the loop around it (M2b).
+actually paid (M2a) — then the loop around it, free and deterministic (M2b). The one
+billed real-Claude session is deferred to M5 as the flagship cassette.
 
 ### M3 — Parser front door + introduce/edit
 `packages/parse`. The riskiest new seam.

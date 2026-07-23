@@ -39,10 +39,12 @@ cell/    ← ALL demoted playback, OFF the main DAG (nothing on the path imports
   their views, `formula`/`expr`, and the timeline-free `scene.ts`.
 - **workspace** — the pivot: the `WorkspaceAct` log, `fold(log) → Workspace`, and
   the one-transaction `commit`. The keeper this whole project is built around.
-- **copilot** (M2) — the workspace as an instrument: the 4c tool executor
+- **copilot** (M2) — the workspace as an instrument. **M2a:** the 4c tool executor
   (`inspect`/`evalAt`/`whyChanged`/`counterfactual`/`bisectFlip`/`setInput`/
-  `appendFragment`/`runTool`) retargeted onto `WorkspaceLog`/`commit`. **M2a done**;
-  the loop driver + classifier + `ModelClient` seam is M2b (next).
+  `appendFragment`/`runTool`) retargeted onto `WorkspaceLog`/`commit`. **M2b:** the
+  loop — `runTurn(log, question, client, deps)` with a deterministic classifier
+  fast-path (zero model calls), the `ModelClient` seam + free `ScriptedClient` fake,
+  the `sceneBrief` manifest, and structural evidence-grounding. Both **done**.
 - **cell/** (quarantine) — lesson verbs, morph, player/segments/events, prose
   manifest, playback-only views. Kept building + tested, but **off the DAG**.
 
@@ -64,24 +66,23 @@ to reconsider, not to relax the fence.
 
 ## Status (2026-07-23)
 **M0** (substrate lift), **M1** (`workspace` fold), **Stabilize** (decouple from
-math-ai's lesson concepts — shed all discipline libs, flat native vocab, quarantine
-playback), and **M2a** (the copilot tool executor ↔ workspace seam) are all **DONE
-and committed**. Green: typecheck 7/7, **332 tests**. Working tree clean.
-(The 343→332 delta is the deleted, superseded `conversation.ts` self-test — its
-verbs live on as `workspace`'s `foldLog`/`commit`/`coalesce`, already tested.)
+math-ai's lesson concepts), and **M2** (copilot — **M2a** executor ↔ workspace seam
++ **M2b** the loop, classifier, `ModelClient` seam / `ScriptedClient` fake) are all
+**DONE and committed**. Green: typecheck 7/7, **347 tests**. Working tree clean.
+The one billed real-Claude session is deferred to M5 (flagship cassette); everything
+M2 proves runs free with the scripted fake client.
 
 ## The plan
 - `docs/roadmap.md` — the living plan. **Read it first.** Milestones M0/M1/Stabilize
   are marked done; M2–M5 + Phase 2 (UI) are ahead.
 - `docs/stabilize-plan.md` — the executed file-level Stabilize demolition plan.
 
-**NEXT: M2b** — the loop driver around the M2a executor: a headless turn fn
-`(log, question, client) → { answer | manipulated | newLog }`, an intent-classifier
-fast-path (manipulate a param with zero model calls), and a `ModelClient` seam. Needs
-the paused model-access call: **scripted fake client** (free, leaning this way) vs a
-**billed real-Claude cassette** (deferred to M5). Discovery finding logged in roadmap
-M2: the original "lift the loop from `planner`" was stale — planner was never lifted;
-M2 is build-fresh around the executor, not a lift.
+**NEXT: M3** — the parser front door (`packages/parse`): mathjs for parse + numeric
+eval, wrapped into an addressable span tree (target shape = `objects/formula.ts`'s
+`F.tex` spans), with the symbolic/simplify APIs **fenced off** (the no-CAS line). Adds
+the `introduce` act (LaTeX → live object) and `edit-span` (in-place term edit). The
+riskiest new seam — watch for parser scope-creep toward a CAS; the fence test is the
+mitigation. See roadmap M3. (M2's real-Claude cassette is deferred to M5.)
 
 ## Locked decisions
 - **No CAS.** The LLM reasons (fallibly); the engine makes math manipulable/visible/
