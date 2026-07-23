@@ -39,11 +39,13 @@ import type {
   Author,
   AuthorAct,
   FoldFailure,
+  IntroduceAct,
   SetInputAct,
   TryFold,
   Workspace,
   WorkspaceLog,
 } from '@isomat/workspace';
+import { introduceExpr } from '@isomat/parse';
 
 // ─────────────────────────── the call/result surface ───────────────────────────
 
@@ -99,7 +101,38 @@ export type ToolCall =
       readonly maxProbes?: number;
     }
   | { readonly tool: 'setInput'; readonly id: Id; readonly value: number }
-  | { readonly tool: 'appendFragment'; readonly source: string };
+  | { readonly tool: 'appendFragment'; readonly source: string }
+  | {
+      readonly tool: 'plot';
+      readonly text: string;
+      readonly domain: { readonly from: number; readonly to: number };
+      readonly id?: Id;
+      readonly bindings?: Readonly<Record<string, Id>>;
+    }
+  | {
+      readonly tool: 'tabulate';
+      readonly id: Id;
+      readonly from: number;
+      readonly to: number;
+      readonly count: number;
+    }
+  | {
+      readonly tool: 'numericEquivalence';
+      readonly idA: Id;
+      readonly idB: Id;
+      readonly from: number;
+      readonly to: number;
+      readonly count: number;
+      readonly tolerance?: number;
+    }
+  | {
+      readonly tool: 'numericRoot';
+      readonly id: Id;
+      readonly from: number;
+      readonly to: number;
+      readonly count?: number;
+      readonly tolerance?: number;
+    };
 
 /** The scene as ids → live handles — `Workspace.objects`, i.e. `sceneIndex(stage)`. */
 export type SceneMap = Workspace['objects'];
@@ -308,6 +341,284 @@ export function evalAt(scene: SceneMap, id: Id, args: readonly number[]): ToolRe
     );
   }
   return ok(value);
+}
+
+// ─────────────────────────── numeric probes (M5a) ───────────────────────────
+// Four probes that SAMPLE live `fn` rules — the engine doing arithmetic the model
+// must never do itself. Every result is `sampled` evidence: agreement across a
+// finite point set, never a proof. `numericEquivalence` is the one that catches a
+// wrong LLM derivative; none of these differentiate or simplify (the no-CAS line).
+
+/** How many points `plot` samples the new curve at, for its `sampled` witness. */
+const PLOT_SAMPLE_COUNT = 5;
+/** A generous cap on a single read's sample count — a rail, not a real limit. */
+const SAMPLE_MAX = 10_000;
+/** Default agreement tolerance for `numericEquivalence` — float hygiene, not proof. */
+const DEFAULT_EQUIV_TOL = 1e-9;
+/** Default scan resolution + root precision for `numericRoot`. */
+const DEFAULT_ROOT_COUNT = 100;
+const DEFAULT_ROOT_TOL = 1e-9;
+
+const finite = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n);
+
+/** `count` evenly spaced points across [from, to] (descending if from > to). */
+function samplePoints(from: number, to: number, n: number): number[] {
+  if (n <= 1) return [from];
+  const xs: number[] = [];
+  for (let i = 0; i < n; i += 1) xs.push(from + ((to - from) * i) / (n - 1));
+  return xs;
+}
+
+/**
+ * Resolve a live `fn` to its authored `at` sampler — the same seam `evalAt`
+ * reads, shared by every M5a probe. A non-`fn` is `not-evaluable`; an unknown id
+ * is the boundary rule. The returned closure yields the fn's value at x, or `NaN`
+ * for a shape that is not a single number (the caller turns that into `domain`).
+ */
+function resolveFn(scene: SceneMap, id: Id): ((x: number) => number) | ToolResult {
+  const h = reach(scene, id);
+  if (isToolResult(h)) return h;
+  if (EVAL_ARITY[h.kind] === undefined) {
+    return err(
+      'not-evaluable',
+      `"${id}" is a ${h.kind}, which has no rule to sample. This probe samples a plotted fn at a ` +
+        `coordinate x.`,
+    );
+  }
+  const at = (h as unknown as { at: (x: number) => number | readonly number[] }).at;
+  return (x: number) => {
+    const r = at.call(h, x);
+    return typeof r === 'number' ? r : Number.NaN;
+  };
+}
+
+const outsideDomain = (id: Id, x: number): ToolResult =>
+  err('domain', `"${id}" is not finite at x = ${x} — the point is outside the rule's domain.`);
+
+/**
+ * `plot(text, domain, id?)` — the WRITE probe, the parse-gated "model supplies
+ * text, engine compiles" boundary (`appendFragment` is its raw-js sibling). The
+ * model's expression TEXT routes through `introduceExpr` → a stable-id `introduce`
+ * act → `commit`; the new live curve is sampled at a handful of points for the
+ * `sampled` witness. `introduceExpr` throws on empty text / a bad domain / an
+ * unbound free variable — the model's mistake, returned as `bad-args` data so the
+ * loop retries, never a crash across the boundary. Numeric eval stays in the
+ * sandbox: the samples read the folded object's own `at`, not a host evaluator.
+ */
+export async function plot(
+  log: WorkspaceLog,
+  fold: TryFold,
+  args: {
+    readonly text: string;
+    readonly domain: { readonly from: number; readonly to: number };
+    readonly id?: Id;
+    readonly bindings?: Readonly<Record<string, Id>>;
+  },
+  attribution: Attribution = COPILOT,
+): Promise<WriteOutcome> {
+  if (typeof args.text !== 'string' || args.text.trim() === '') {
+    return { result: err('bad-args', 'plot wants non-empty expression text.'), log };
+  }
+  const from = args.domain?.from;
+  const to = args.domain?.to;
+  if (!finite(from) || !finite(to) || !(from < to)) {
+    return {
+      result: err(
+        'bad-args',
+        `plot wants a finite domain { from, to } with from < to; got { from: ${from}, to: ${to} }.`,
+      ),
+      log,
+    };
+  }
+  // an explicit id when the model gives one; otherwise a stable session id minted
+  // off the log position — `@`-form so it never collides with a positional `#n`
+  // (session.ts) and, baked into the act, reproducible under re-fold
+  const id = args.id ?? `plot@${log.length}`;
+
+  let act: IntroduceAct;
+  try {
+    act = introduceExpr({
+      text: args.text,
+      at: { x: 0, y: 0 },
+      id,
+      domain: [from, to],
+      ...(args.bindings ? { bindings: args.bindings } : {}),
+      by: attribution.by,
+      turn: attribution.turn,
+    });
+  } catch (e) {
+    return { result: err('bad-args', e instanceof Error ? e.message : String(e)), log };
+  }
+
+  const candidate = [...log, act];
+  const outcome = await fold(candidate);
+  if (!outcome.ok) return { result: foldRejected(outcome.failure), log };
+
+  const h = outcome.workspace.objects.get(id);
+  const sampled: Array<[number, number]> = [];
+  if (h && EVAL_ARITY[h.kind] !== undefined) {
+    const at = (h as unknown as { at: (x: number) => number | readonly number[] }).at;
+    for (const x of samplePoints(from, to, PLOT_SAMPLE_COUNT)) {
+      const y = at.call(h, x);
+      if (typeof y === 'number' && Number.isFinite(y)) sampled.push([x, y]);
+    }
+  }
+  return { result: ok({ id, sampled: sampled as unknown as Json }), log: candidate };
+}
+
+/**
+ * `tabulate(id, from, to, count)` — a READ probe: sample one live `fn` at `count`
+ * evenly spaced points across [from, to]. Pure — the live scene never moves. A
+ * point outside the rule's domain is a `domain` error (as `evalAt`), not a crash.
+ */
+export function tabulate(
+  scene: SceneMap,
+  args: { readonly id: Id; readonly from: number; readonly to: number; readonly count: number },
+): ToolResult {
+  const { id, from, to, count } = args;
+  if (!finite(from) || !finite(to)) {
+    return err('bad-args', `tabulate("${id}") wants finite from/to; got [${from}, ${to}].`);
+  }
+  if (!Number.isInteger(count) || count < 1 || count > SAMPLE_MAX) {
+    return err('bad-args', `tabulate("${id}") wants an integer count in [1, ${SAMPLE_MAX}]; got ${count}.`);
+  }
+  const f = resolveFn(scene, id);
+  if (typeof f !== 'function') return f;
+
+  const rows: Array<[number, number]> = [];
+  for (const x of samplePoints(from, to, count)) {
+    const y = f(x);
+    if (!Number.isFinite(y)) return outsideDomain(id, x);
+    rows.push([x, y]);
+  }
+  return ok({ rows: rows as unknown as Json });
+}
+
+/**
+ * `numericEquivalence(idA, idB, from, to, count, tolerance?)` — a READ probe:
+ * sample two live `fn`s at `count` points and report `max|a−b|`. `equivalent` is
+ * `maxAbsDiff ≤ tolerance` (default `1e-9`). This is SAMPLED AGREEMENT, NEVER a
+ * proof — two functions can agree at every sample and differ between them; it is
+ * exactly the probe that catches a wrong LLM derivative (a real `maxAbsDiff`).
+ * Pure — the live scene never moves. No differentiation, no simplification.
+ */
+export function numericEquivalence(
+  scene: SceneMap,
+  args: {
+    readonly idA: Id;
+    readonly idB: Id;
+    readonly from: number;
+    readonly to: number;
+    readonly count: number;
+    readonly tolerance?: number;
+  },
+): ToolResult {
+  const { idA, idB, from, to, count } = args;
+  if (!finite(from) || !finite(to)) {
+    return err('bad-args', `numericEquivalence wants finite from/to; got [${from}, ${to}].`);
+  }
+  if (!Number.isInteger(count) || count < 1 || count > SAMPLE_MAX) {
+    return err('bad-args', `numericEquivalence wants an integer count in [1, ${SAMPLE_MAX}]; got ${count}.`);
+  }
+  if (args.tolerance !== undefined && (!finite(args.tolerance) || args.tolerance < 0)) {
+    return err('bad-args', `numericEquivalence tolerance must be a finite number ≥ 0; got ${args.tolerance}.`);
+  }
+  const fa = resolveFn(scene, idA);
+  if (typeof fa !== 'function') return fa;
+  const fb = resolveFn(scene, idB);
+  if (typeof fb !== 'function') return fb;
+
+  const tolerance = args.tolerance ?? DEFAULT_EQUIV_TOL;
+  let maxAbsDiff = 0;
+  for (const x of samplePoints(from, to, count)) {
+    const ya = fa(x);
+    if (!Number.isFinite(ya)) return outsideDomain(idA, x);
+    const yb = fb(x);
+    if (!Number.isFinite(yb)) return outsideDomain(idB, x);
+    const d = Math.abs(ya - yb);
+    if (d > maxAbsDiff) maxAbsDiff = d;
+  }
+  return ok({ equivalent: maxAbsDiff <= tolerance, maxAbsDiff, points: count, tolerance });
+}
+
+/**
+ * `numericRoot(id, from, to, count?, tolerance?)` — a READ probe: scan [from, to]
+ * in `count` sub-intervals (default 100) for a SIGN CHANGE in the live `fn`, then
+ * bisect to a root within `tolerance` (default `1e-9`). Result `{ root, bracket }`
+ * or `{ root: null }` when no sign change is found. Mirrors `bisectFlip`'s bracket
+ * search, but on a numeric value crossing zero rather than a claim verdict flip.
+ * SAMPLED evidence — a root the sampling found, not a symbolic solve. Pure read.
+ */
+export function numericRoot(
+  scene: SceneMap,
+  args: {
+    readonly id: Id;
+    readonly from: number;
+    readonly to: number;
+    readonly count?: number;
+    readonly tolerance?: number;
+  },
+): ToolResult {
+  const { id, from, to } = args;
+  if (!finite(from) || !finite(to) || !(from < to)) {
+    return err('bad-args', `numericRoot("${id}") wants finite from/to with from < to; got [${from}, ${to}].`);
+  }
+  const count = args.count ?? DEFAULT_ROOT_COUNT;
+  if (!Number.isInteger(count) || count < 1 || count > SAMPLE_MAX) {
+    return err('bad-args', `numericRoot("${id}") wants an integer count in [1, ${SAMPLE_MAX}]; got ${count}.`);
+  }
+  if (args.tolerance !== undefined && (!finite(args.tolerance) || args.tolerance <= 0)) {
+    return err('bad-args', `numericRoot tolerance must be a finite number > 0; got ${args.tolerance}.`);
+  }
+  const f = resolveFn(scene, id);
+  if (typeof f !== 'function') return f;
+  const tolerance = args.tolerance ?? DEFAULT_ROOT_TOL;
+
+  const at = (x: number): number | ToolResult => {
+    const y = f(x);
+    return Number.isFinite(y) ? y : outsideDomain(id, x);
+  };
+
+  let prevX = from;
+  let prevY = at(from);
+  if (typeof prevY !== 'number') return prevY;
+  if (prevY === 0) return ok({ root: from, bracket: [from, from] });
+
+  for (let i = 1; i <= count; i += 1) {
+    const x = from + ((to - from) * i) / count;
+    const y = at(x);
+    if (typeof y !== 'number') return y;
+
+    if (y === 0) return ok({ root: x, bracket: [x, x] });
+
+    if (Math.sign(prevY) !== Math.sign(y)) {
+      // bracketed: bisect [prevX, x] to precision, tightening on the sign
+      let lo = prevX;
+      let hi = x;
+      let flo = prevY;
+      while (hi - lo > tolerance) {
+        const mid = lo + (hi - lo) / 2;
+        if (mid === lo || mid === hi) break; // the doubles are adjacent: exact
+        const fmid = at(mid);
+        if (typeof fmid !== 'number') return fmid;
+        if (fmid === 0) {
+          lo = mid;
+          hi = mid;
+          break;
+        }
+        if (Math.sign(fmid) === Math.sign(flo)) {
+          lo = mid;
+          flo = fmid;
+        } else {
+          hi = mid;
+        }
+      }
+      return ok({ root: lo + (hi - lo) / 2, bracket: [lo, hi] });
+    }
+    prevX = x;
+    prevY = y;
+  }
+  return ok({ root: null });
 }
 
 // ─────────────────────────────── whyChanged ───────────────────────────────
@@ -681,6 +992,17 @@ export async function runTool(call: ToolCall, hooks: ToolHooks): Promise<ToolOut
         return { result: evalAt(hooks.scene(), call.id, call.args), ...passthrough };
       case 'whyChanged':
         return { result: whyChanged(hooks.scene(), call.id), ...passthrough };
+      case 'tabulate':
+        return { result: tabulate(hooks.scene(), call), ...passthrough };
+      case 'numericEquivalence':
+        return { result: numericEquivalence(hooks.scene(), call), ...passthrough };
+      case 'numericRoot':
+        return { result: numericRoot(hooks.scene(), call), ...passthrough };
+      case 'plot': {
+        const { log, fold } = hooks;
+        if (!log || !fold) return unwired('a log and a fold hook');
+        return await plot(log, fold, call, attribution);
+      }
       case 'counterfactual':
       case 'bisectFlip': {
         const { log, fold } = hooks;

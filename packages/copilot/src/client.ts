@@ -23,8 +23,9 @@ import type { Json, ToolCall, ToolResult } from './tools.js';
  * How an answer is grounded. Reuses the engine's own claim vocabulary — the
  * whole point of the no-CAS line is that a model reports the evidence a probe
  * returned rather than narrating an opinion as a proof. Probe tools
- * (`evalAt`/`counterfactual`/`bisectFlip`) yield `sampled`; a claim inspect
- * carries whichever of the three the claim was built with.
+ * (`evalAt`/`counterfactual`/`bisectFlip` and M5a's
+ * `plot`/`tabulate`/`numericEquivalence`/`numericRoot`) yield `sampled`; a claim
+ * inspect carries whichever of the three the claim was built with.
  */
 export type Evidence = ClaimEvidence;
 
@@ -148,6 +149,30 @@ export const TOOL_SPECS: readonly ToolSpec[] = [
     description: 'Author new objects: gate + commit a program fragment that reaches earlier objects only by id (byId). A gate rejection comes back as your retry brief.',
     input: { source: 'string' },
   },
+  {
+    name: 'plot',
+    description:
+      "Compile YOUR math text (e.g. a derivative candidate) into a live plotted fn: the engine parses it, commits an introduce act, and SAMPLES the new curve. This is the parse gate — you supply text, the engine compiles. Returns { id, sampled: [[x,y],…] } (evidence: sampled).",
+    input: { text: 'string', domain: '{ from: number, to: number }', id: 'string?', bindings: '{ [var]: string }?' },
+  },
+  {
+    name: 'tabulate',
+    description:
+      'Sample a live fn at count evenly spaced points across [from, to]. Returns { rows: [[x,y],…] } — the engine runs the object\'s own rule; never tabulate by hand (evidence: sampled).',
+    input: { id: 'string', from: 'number', to: 'number', count: 'number' },
+  },
+  {
+    name: 'numericEquivalence',
+    description:
+      'Sample two live fns at count points and report whether they agree within tolerance. Returns { equivalent, maxAbsDiff, points, tolerance }. This is SAMPLED AGREEMENT, NEVER a proof — functions can agree at every sample and differ between them. Use it to check a derivative candidate against a target; report the result as sampled, not proven (evidence: sampled).',
+    input: { idA: 'string', idB: 'string', from: 'number', to: 'number', count: 'number', tolerance: 'number?' },
+  },
+  {
+    name: 'numericRoot',
+    description:
+      "Scan [from, to] for a sign change in a live fn, then bisect to a root. Returns { root, bracket } or { root: null } when no sign change is found — a root the sampling found, not a symbolic solve (evidence: sampled).",
+    input: { id: 'string', from: 'number', to: 'number', count: 'number?', tolerance: 'number?' },
+  },
 ];
 
 /**
@@ -159,7 +184,13 @@ export const TOOL_SPECS: readonly ToolSpec[] = [
 export const SYSTEM_PROMPT = [
   'You co-edit a live math workspace with a user. You CANNOT compute mathematics yourself —',
   'use the tools to probe the actual live objects, which the engine evaluates exactly.',
-  'Claims carry an evidence type: exact-comparison, sampled, or authored-predicate. Never',
-  'present a sampled agreement or an authored predicate as a proof — report the evidence the',
-  'engine returned. Reach objects only by the ids the scene brief offers.',
+  'When a question needs a derivative, an antiderivative, or any new expression, YOU supply the',
+  'candidate as text and `plot` it: the engine compiles and samples it — you are fallible, the',
+  'engine only samples. Check a candidate against a target with `numericEquivalence`; its',
+  'agreement is SAMPLED, never a proof (two functions can agree at every sample and differ',
+  'between them), so if maxAbsDiff exceeds the tolerance the candidate is wrong. Use `tabulate`',
+  'to read a curve and `numericRoot` to find a sampled root. Claims carry an evidence type:',
+  'exact-comparison, sampled, or authored-predicate. Never present a sampled agreement or an',
+  'authored predicate as a proof — report the evidence the engine returned. Reach objects only',
+  'by the ids the scene brief offers.',
 ].join(' ');

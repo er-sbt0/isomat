@@ -110,7 +110,8 @@ async function foldScene(fold: TryFold, log: WorkspaceLog): Promise<SceneMap> {
 
 /**
  * The evidence types a run has actually EARNED — the probes that succeeded.
- * `evalAt`/`counterfactual`/`bisectFlip` are the engine sampling live objects
+ * `evalAt`/`counterfactual`/`bisectFlip` and M5a's `plot`/`tabulate`/
+ * `numericEquivalence`/`numericRoot` are all the engine sampling live objects
  * (`sampled`); an `inspect` of a claim carries whichever evidence the claim was
  * built with. This is what an answer's declared evidence is checked against.
  */
@@ -119,7 +120,15 @@ function groundedEvidence(steps: readonly TurnStep[]): Set<Evidence> {
   for (const step of steps) {
     if (!step.result.ok) continue;
     const tool = step.call.tool;
-    if (tool === 'evalAt' || tool === 'counterfactual' || tool === 'bisectFlip') {
+    if (
+      tool === 'evalAt' ||
+      tool === 'counterfactual' ||
+      tool === 'bisectFlip' ||
+      tool === 'plot' ||
+      tool === 'tabulate' ||
+      tool === 'numericEquivalence' ||
+      tool === 'numericRoot'
+    ) {
       grounded.add('sampled');
     } else if (tool === 'inspect') {
       const ev = (step.result.value as { evidence?: unknown }).evidence;

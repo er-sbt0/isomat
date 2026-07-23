@@ -15,6 +15,7 @@
   "dependencies": {
     "@isomat/core": "workspace:*",
     "@isomat/objects": "workspace:*",
+    "@isomat/parse": "workspace:*",
     "@isomat/sandbox": "workspace:*",
     "@isomat/workspace": "workspace:*"
   },

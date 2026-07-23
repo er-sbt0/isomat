@@ -23,7 +23,11 @@ import {
   counterfactual,
   evalAt,
   inspect,
+  numericEquivalence,
+  numericRoot,
+  plot,
   setInput,
+  tabulate,
   whyChanged,
 } from '@isomat/copilot';
 import type { CompileFragment, SceneMap } from '@isomat/copilot';
@@ -170,4 +174,92 @@ describe('a hand-scripted tool sequence against a QuickJS-folded Workspace', () 
     }
     expect(w.log).toBe(log);
   });
+});
+
+/**
+ * M5a — the four probe tools against a real QuickJS-folded Workspace. Three
+ * plotted fns: two identical (`sq`, `sq2`), one offset by 1 (`sqp1`, the wrong
+ * derivative stand-in), and one with a known root at 2 (`rooter = x^2 - 4`).
+ */
+const M5_PROGRAM = [
+  'plot((x) => x*x, { domain: [-3, 3], label: "sq", id: "sq" });',
+  'plot((x) => x*x, { domain: [-3, 3], label: "sq2", id: "sq2" });',
+  'plot((x) => x*x + 1, { domain: [-3, 3], label: "sqp1", id: "sqp1" });',
+  'plot((x) => x*x - 4, { domain: [0, 5], label: "rooter", id: "rooter" });',
+].join('\n');
+
+describe('the M5a probe toolset against a QuickJS-folded Workspace', () => {
+  it('tabulate / numericEquivalence / numericRoot are pure reads; plot commits', async () => {
+    const log: WorkspaceLog = [{ kind: 'author', js: M5_PROGRAM, source: M5_PROGRAM, by: 'user', turn: 0 }];
+
+    const live = await fold(log);
+    expect(live.ok ? 'ok' : (live as { failure: { message: string } }).failure.message).toBe('ok');
+    if (!live.ok) return;
+    const scene = live.workspace.objects;
+
+    const sq = idByLabel(scene, 'sq', 'fn');
+    const sq2 = idByLabel(scene, 'sq2', 'fn');
+    const sqp1 = idByLabel(scene, 'sqp1', 'fn');
+    const rooter = idByLabel(scene, 'rooter', 'fn');
+
+    // ── tabulate: sample the guest-authored rule x^2 across [-3, 3] ──
+    const table = tabulate(scene, { id: sq, from: -3, to: 3, count: 7 });
+    expect(table.ok).toBe(true);
+    if (table.ok) {
+      const rows = (table.value as { rows: Array<[number, number]> }).rows;
+      expect(rows).toHaveLength(7);
+      expect(rows[0]).toEqual([-3, 9]);
+      expect(rows[3]).toEqual([0, 0]);
+      expect(rows[6]).toEqual([3, 9]);
+    }
+
+    // ── numericEquivalence: sq vs sq2 agree; sq vs sqp1 do not (a wrong derivative) ──
+    const same = numericEquivalence(scene, { idA: sq, idB: sq2, from: -3, to: 3, count: 21 });
+    expect(same.ok).toBe(true);
+    if (same.ok) expect(same.value).toMatchObject({ equivalent: true, maxAbsDiff: 0 });
+
+    const diff = numericEquivalence(scene, { idA: sq, idB: sqp1, from: -3, to: 3, count: 21 });
+    expect(diff.ok).toBe(true);
+    if (diff.ok) {
+      // a REAL disagreement: |x^2 - (x^2 + 1)| = 1 at every sample — the engine
+      // catches the model's wrong candidate; it is sampled, never "proven"
+      expect(diff.value).toMatchObject({ equivalent: false, maxAbsDiff: 1 });
+    }
+
+    // ── numericRoot: the known root of x^2 - 4 near 2; no root where none exists ──
+    const root = numericRoot(scene, { id: rooter, from: 0, to: 5 });
+    expect(root.ok).toBe(true);
+    if (root.ok) expect((root.value as { root: number }).root).toBeCloseTo(2, 6);
+
+    const noRoot = numericRoot(scene, { id: sqp1, from: -3, to: 3 });
+    expect(noRoot).toEqual({ ok: true, value: { root: null } });
+
+    // ── every probe above was a pure read: the live scene never moved ──
+    const table2 = tabulate(scene, { id: sq, from: -3, to: 3, count: 7 });
+    expect(table2).toEqual(table);
+
+    // ── plot: the model supplies TEXT; the engine parses, commits, and samples ──
+    const written = await plot(log, tryFold, { text: '2*x', domain: { from: -3, to: 3 } });
+    expect(written.result.ok ? 'ok' : JSON.stringify((written.result as { error: unknown }).error)).toBe('ok');
+    expect(written.log).toHaveLength(2); // the write advanced the log
+    expect(written.log[1]).toMatchObject({ kind: 'introduce', by: 'copilot' });
+    if (!written.result.ok) throw new Error(`plot failed: ${written.result.error.message}`);
+    const { id, sampled } = written.result.value as unknown as {
+      id: string;
+      sampled: Array<[number, number]>;
+    };
+    expect(sampled.length).toBeGreaterThan(0);
+
+    // the committed log FOLDS to a live fn under that id, sampling 2*x exactly
+    const refolded = await fold(written.log);
+    expect(refolded.ok).toBe(true);
+    if (refolded.ok) {
+      const g = refolded.workspace.objects.get(id) as unknown as { at(x: number): number } | undefined;
+      expect(g && g.at(3)).toBe(6); // 2 * 3
+    }
+
+    // the live scene STILL has not moved — the write advances the log; the screen
+    // is the caller's to refresh, exactly as the other write tools
+    expect(scene.has(id)).toBe(false);
+  }, 30_000);
 });

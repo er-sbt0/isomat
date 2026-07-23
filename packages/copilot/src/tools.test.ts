@@ -28,8 +28,12 @@ import {
   counterfactual,
   evalAt,
   inspect,
+  numericEquivalence,
+  numericRoot,
+  plot,
   runTool,
   setInput,
+  tabulate,
   whyChanged,
 } from '@isomat/copilot';
 import type { CompileFragment } from '@isomat/copilot';
@@ -528,5 +532,162 @@ describe('appendFragment — the author path as a tool', () => {
     );
     expect(out.result.ok).toBe(false);
     if (!out.result.ok) expect(out.result.error.code).toBe('failed');
+  });
+});
+
+// ── M5a: the four probe tools — each returns typed `sampled` evidence ──
+
+/** Register a plotted fn in the scene and hand back its id — the probe subject. */
+function plotFn(
+  scope: NativeScope,
+  rule: (x: number) => number,
+  label: string,
+  domain: readonly [number, number] = [-3, 3],
+): string {
+  return (scope.plot(rule, { domain: [domain[0], domain[1]], label }).elements[0] as unknown as { id: string })
+    .id;
+}
+
+describe('tabulate — sample a live fn at evenly spaced points (sampled)', () => {
+  it('returns count rows of [x, y] read off the object rule', () => {
+    const s = scene();
+    // s.f is spin/x with spin = 1: at x = 1..5 the values are 1, .5, .333…, .25, .2
+    const r = tabulate(s.index(), { id: s.f.id, from: 1, to: 5, count: 5 });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const rows = (r.value as { rows: Array<[number, number]> }).rows;
+    expect(rows).toHaveLength(5);
+    expect(rows[0]).toEqual([1, 1]);
+    expect(rows[4]).toEqual([5, 0.2]);
+  });
+
+  it('a point outside the domain is a domain error (spin/x at 0)', () => {
+    const s = scene();
+    const r = tabulate(s.index(), { id: s.f.id, from: 0, to: 4, count: 5 });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.code).toBe('domain');
+  });
+
+  it('a non-fn is not-evaluable; an unknown id is the boundary; bad count is bad-args', () => {
+    const s = scene();
+    expect((tabulate(s.index(), { id: s.under.id, from: 1, to: 5, count: 3 }) as { error: { code: string } }).error?.code).toBe('not-evaluable');
+    expect((tabulate(s.index(), { id: 'fn#999', from: 1, to: 5, count: 3 }) as { error: { code: string } }).error?.code).toBe('unknown-id');
+    expect((tabulate(s.index(), { id: s.f.id, from: 1, to: 5, count: 0 }) as { error: { code: string } }).error?.code).toBe('bad-args');
+    expect((tabulate(s.index(), { id: s.f.id, from: Number.NaN, to: 5, count: 3 }) as { error: { code: string } }).error?.code).toBe('bad-args');
+  });
+});
+
+describe('numericEquivalence — sampled agreement, NEVER a proof', () => {
+  it('two ids for the same function agree: equivalent true, maxAbsDiff 0', () => {
+    const s = scene();
+    const a = plotFn(s.scope, (x) => x * x, 'sq-a');
+    const b = plotFn(s.scope, (x) => x * x, 'sq-b');
+    const r = numericEquivalence(s.index(), { idA: a, idB: b, from: -3, to: 3, count: 11 });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.value).toMatchObject({ equivalent: true, maxAbsDiff: 0, points: 11 });
+      expect((r.value as { tolerance: number }).tolerance).toBe(1e-9);
+    }
+  });
+
+  it('a mismatched pair reports equivalent false with a REAL maxAbsDiff', () => {
+    const s = scene();
+    const a = plotFn(s.scope, (x) => x * x, 'sq');
+    const b = plotFn(s.scope, (x) => x * x + 1, 'sq-plus-one');
+    const r = numericEquivalence(s.index(), { idA: a, idB: b, from: -3, to: 3, count: 11 });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value).toMatchObject({ equivalent: false, maxAbsDiff: 1 });
+  });
+
+  it('a generous tolerance can call a small gap equivalent — still sampled, not proven', () => {
+    const s = scene();
+    const a = plotFn(s.scope, (x) => x * x, 'sq');
+    const b = plotFn(s.scope, (x) => x * x + 0.5, 'sq-plus-half');
+    const r = numericEquivalence(s.index(), { idA: a, idB: b, from: -3, to: 3, count: 11, tolerance: 1 });
+    expect(r.ok && (r.value as { equivalent: boolean }).equivalent).toBe(true);
+  });
+
+  it('validates: unknown id, bad count, negative tolerance', () => {
+    const s = scene();
+    const a = plotFn(s.scope, (x) => x, 'lin');
+    expect((numericEquivalence(s.index(), { idA: a, idB: 'fn#404', from: -1, to: 1, count: 3 }) as { error: { code: string } }).error?.code).toBe('unknown-id');
+    expect((numericEquivalence(s.index(), { idA: a, idB: a, from: -1, to: 1, count: 0 }) as { error: { code: string } }).error?.code).toBe('bad-args');
+    expect((numericEquivalence(s.index(), { idA: a, idB: a, from: -1, to: 1, count: 3, tolerance: -1 }) as { error: { code: string } }).error?.code).toBe('bad-args');
+  });
+});
+
+describe('numericRoot — scan for a sign change, then bisect (sampled)', () => {
+  it('finds the root of x^2 - 4 near 2', () => {
+    const s = scene();
+    const rooter = plotFn(s.scope, (x) => x * x - 4, 'rooter', [0, 5]);
+    const r = numericRoot(s.index(), { id: rooter, from: 0, to: 5 });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const v = r.value as { root: number | null; bracket: [number, number] };
+      expect(v.root).not.toBeNull();
+      expect(v.root as number).toBeCloseTo(2, 6);
+      expect(v.bracket[0]).toBeLessThanOrEqual(v.root as number);
+      expect(v.bracket[1]).toBeGreaterThanOrEqual(v.root as number);
+    }
+  });
+
+  it('no sign change on the interval is a typed { root: null }, not an error', () => {
+    const s = scene();
+    const nope = plotFn(s.scope, (x) => x * x + 1, 'always-positive', [0, 5]);
+    const r = numericRoot(s.index(), { id: nope, from: 0, to: 5 });
+    expect(r).toEqual({ ok: true, value: { root: null } });
+  });
+
+  it('validates: unknown id, inverted bounds', () => {
+    const s = scene();
+    expect((numericRoot(s.index(), { id: 'fn#404', from: 0, to: 5 }) as { error: { code: string } }).error?.code).toBe('unknown-id');
+    const f = plotFn(s.scope, (x) => x, 'lin', [-2, 2]);
+    expect((numericRoot(s.index(), { id: f, from: 5, to: 0 }) as { error: { code: string } }).error?.code).toBe('bad-args');
+  });
+});
+
+describe('plot — the WRITE probe: model text → parse gate → sampled', () => {
+  it('empty text and a bad domain are bad-args before any fold', async () => {
+    const s = scene();
+    const bad1 = await plot(s.log, s.fold, { text: '  ', domain: { from: -3, to: 3 } });
+    expect(bad1.result.ok).toBe(false);
+    if (!bad1.result.ok) expect(bad1.result.error.code).toBe('bad-args');
+    const bad2 = await plot(s.log, s.fold, { text: 'x^2', domain: { from: 3, to: 3 } });
+    expect(bad2.result.ok).toBe(false);
+    if (!bad2.result.ok) expect(bad2.result.error.code).toBe('bad-args');
+    // the log is untouched on rejection
+    expect(bad1.log).toBe(s.log);
+    expect(bad2.log).toBe(s.log);
+  });
+
+  it("an unbound free variable is the parser's complaint returned as bad-args", async () => {
+    const s = scene();
+    // "a*x": x is the plotted var, but a is free and no binding was given
+    const w = await plot(s.log, s.fold, { text: 'a*x', domain: { from: -3, to: 3 } });
+    expect(w.result.ok).toBe(false);
+    if (!w.result.ok) {
+      expect(w.result.error.code).toBe('bad-args');
+      expect(w.result.error.message).toContain('free variable');
+    }
+    expect(w.log).toBe(s.log);
+  });
+
+  it('without a fold hook, runTool returns a failed result, not a crash', async () => {
+    const s = scene();
+    const out = await runTool({ tool: 'plot', text: 'x^2', domain: { from: -3, to: 3 } }, { scene: s.index });
+    expect(out.result.ok).toBe(false);
+    if (!out.result.ok) expect(out.result.error.code).toBe('failed');
+  });
+});
+
+describe('runTool — the M5a probes dispatch and ground `sampled`', () => {
+  it('routes tabulate, numericEquivalence, and numericRoot as reads', async () => {
+    const s = scene();
+    const a = plotFn(s.scope, (x) => x * x, 'sq-a');
+    const b = plotFn(s.scope, (x) => x * x, 'sq-b');
+    expect((await runTool({ tool: 'tabulate', id: s.f.id, from: 1, to: 5, count: 3 }, { scene: s.index })).result.ok).toBe(true);
+    expect((await runTool({ tool: 'numericEquivalence', idA: a, idB: b, from: -3, to: 3, count: 5 }, { scene: s.index })).result.ok).toBe(true);
+    const root = await runTool({ tool: 'numericRoot', id: plotFn(s.scope, (x) => x * x - 4, 'r', [0, 5]), from: 0, to: 5 }, { scene: s.index });
+    expect(root.result.ok).toBe(true);
   });
 });

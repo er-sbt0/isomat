@@ -23,6 +23,10 @@ export {
   bisectFlip,
   setInput,
   appendFragment,
+  plot,
+  tabulate,
+  numericEquivalence,
+  numericRoot,
   runTool,
 } from './tools.js';
 export type {
