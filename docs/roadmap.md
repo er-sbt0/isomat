@@ -105,6 +105,35 @@ Findings carried forward:
   `link`). M4's `scopedManifest` BFS needs the copilot (M2) to author programs
   that actually record edges — watch when the loop starts writing fragments.
 
+### Stabilize — decouple from math-ai's concepts ✅ DONE (2026-07-23)
+Inserted before M2 to pay down the M0 "whole engine" debt and make isomat its own
+lean thing. Decisions: excise + quarantine, rename to a flat workspace-native
+vocabulary, shed ALL discipline libraries. Executed in 5 verified stages (each
+ended green; see `docs/stabilize-plan.md`):
+- **S1/S2** (`14affc2`) — import-boundary fence; host inverted to build on `core`
+  alone (killed the M0 root instability); substrate types extracted to
+  `@isomat/substrate`; `sceneIndex`→timeline-free `scene.ts`.
+- **S3** (`7aaa35e`) — the flat native surface (`expr`/`span`/`param`/`derive`/
+  `plot`/`readout`/`claim`/`link`/`note`/`byId`, bare guest globals); **auto-register
+  on construction** (no show/place verb; scene reads `stage.registered`+views,
+  timeline-free); **shed** the 6 discipline libs + `nerode` fixture + ~140 tests.
+- **S4/S5** (`60b1422`) — playback quarantined to a `cell/` package OFF the main
+  DAG; renamed `host`→`sandbox`, `library`→`objects` (render+lesson folded/deleted);
+  fence forbids main-path→`cell`; pruned dead `run.sh`/verify.
+
+**Final DAG (acyclic, depth 3):** `core → substrate/sandbox/objects → workspace`;
+`cell/` off to the side. Green: typecheck 6/6, **343 tests** (was 534 — the delta is
+shed disciplines, not lost coverage; quarantined tests still run in `cell/`).
+
+Carried into M2:
+- **`tools.ts` + `conversation.ts` are parked in `sandbox`** (core-only, tests
+  already in `workspace`). M2 lifts them into a real `copilot/` package.
+- `plot` is **numeric-rule-only until M3's parser**; `expr`/`claim` register but
+  their views materialize **lazily** (errors-as-data) — M2/M3 wiring a renderer
+  must honor that.
+- `core/timeline.ts` stays in `core` but must remain unreachable from the
+  workspace path (fence guards it; keep it out of `core`'s public barrel).
+
 ### M2 — 4c loop, live and headless
 `packages/copilot`. Light up what math-ai built but never wired.
 - Lift `runToolLoop`, tool-defs, the intent classifier, and the loop cassette from `planner`.
