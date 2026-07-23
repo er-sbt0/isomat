@@ -17,7 +17,8 @@
   "dependencies": {
     "@isomat/core": "workspace:*",
     "@isomat/lesson": "workspace:*",
-    "@isomat/render": "workspace:*"
+    "@isomat/render": "workspace:*",
+    "@isomat/substrate": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

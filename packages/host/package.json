@@ -17,9 +17,6 @@
   },
   "dependencies": {
     "@isomat/core": "workspace:*",
-    "@isomat/lesson": "workspace:*",
-    "@isomat/library": "workspace:*",
-    "@isomat/render": "workspace:*",
     "@jitl/quickjs-singlefile-browser-release-sync": "^0.32.0",
     "quickjs-emscripten": "^0.32.0",
     "quickjs-emscripten-core": "^0.32.0"

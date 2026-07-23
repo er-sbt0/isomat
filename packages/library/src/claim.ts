@@ -23,7 +23,7 @@
  */
 
 import type { Handle, World } from '@isomat/core';
-import type { Live, NumericHandle, Verdict } from '@isomat/lesson';
+import type { Live, NumericHandle, Verdict } from '@isomat/substrate';
 import { constNumber, derivedNumber, numOf } from './numeric.js';
 import type { LabeledNumber } from './numeric.js';
 import { live } from './live.js';

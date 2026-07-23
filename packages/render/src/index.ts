@@ -20,7 +20,8 @@ export { Player, createPlayer } from './player.js';
 export type { PlayerOpts, PlayerStatus, SegmentEvent } from './player.js';
 export { splitIntoSegments, segmentTitles, isBeatMarker } from './segments.js';
 export type { Segment } from './segments.js';
-export { sceneManifest, sceneIndex, transitionFeed } from './manifest.js';
+export { sceneManifest, transitionFeed } from './manifest.js';
+export { sceneIndex } from './scene.js';
 export type {
   SceneManifest,
   ManifestBeat,

@@ -18,8 +18,8 @@ import { describe, expect, it } from 'vitest';
 import { createWorld } from '@isomat/core';
 import { createStage } from '@isomat/render';
 import { createProgramScope } from '@isomat/library';
-import { QuickJSHost } from './host.js';
-import { newNodeContext } from './node.js';
+import { QuickJSHost } from '@isomat/host';
+import { newNodeContext } from '@isomat/host/node';
 
 async function bootHost() {
   const world = createWorld();

@@ -24,6 +24,14 @@ export interface StageOpts {
 export class Stage {
   readonly registry = new NodeRegistry();
   readonly views: View[] = [];
+  /**
+   * Objects registered directly on the stage — the NATIVE scene seam
+   * `scene.ts` reads first (Stabilize §2.1, §5.1). The S3 flat authoring
+   * surface auto-registers every object it constructs here on construction, so
+   * a bare `param` appears in the scene with no `expose`/`show` verb. Empty
+   * until S3 populates it; the timeline walk is the interim source.
+   */
+  readonly registered: Handle[] = [];
   readonly doc: Document | null;
   readonly root: HTMLElement | null;
   readonly canvas: HTMLElement | null;

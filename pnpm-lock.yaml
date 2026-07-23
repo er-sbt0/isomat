@@ -35,15 +35,6 @@ importers:
       '@isomat/core':
         specifier: workspace:*
         version: link:../core
-      '@isomat/lesson':
-        specifier: workspace:*
-        version: link:../lesson
-      '@isomat/library':
-        specifier: workspace:*
-        version: link:../library
-      '@isomat/render':
-        specifier: workspace:*
-        version: link:../render
       '@jitl/quickjs-singlefile-browser-release-sync':
         specifier: ^0.32.0
         version: 0.32.0
@@ -72,6 +63,9 @@ importers:
       '@isomat/core':
         specifier: workspace:*
         version: link:../core
+      '@isomat/substrate':
+        specifier: workspace:*
+        version: link:../substrate
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
@@ -94,6 +88,9 @@ importers:
       '@isomat/render':
         specifier: workspace:*
         version: link:../render
+      '@isomat/substrate':
+        specifier: workspace:*
+        version: link:../substrate
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
@@ -116,6 +113,9 @@ importers:
       '@isomat/lesson':
         specifier: workspace:*
         version: link:../lesson
+      '@isomat/substrate':
+        specifier: workspace:*
+        version: link:../substrate
       katex:
         specifier: ^0.16.47
         version: 0.16.47
@@ -129,6 +129,22 @@ importers:
       esbuild:
         specifier: ^0.21.5
         version: 0.21.5
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
+  packages/substrate:
+    dependencies:
+      '@isomat/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
       typescript:
         specifier: ^5.6.3
         version: 5.9.3

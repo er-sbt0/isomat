@@ -15,7 +15,7 @@
  */
 
 import type { Handle } from '@isomat/core';
-import type { NumericHandle, VarySettable } from '@isomat/lesson';
+import type { NumericHandle, VarySettable } from '@isomat/substrate';
 import type { Stage } from '../stage.js';
 import { FramedView, SVG_NS, createFrame, polyline, rangeOf, svgLayer } from './frame.js';
 import type { CoordFrame } from './frame.js';

@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
-import { coalesce, commitEntry, foldSource, isolate, replayLog, studentEvents } from './conversation.js';
+import { coalesce, commitEntry, foldSource, replayLog, studentEvents } from './conversation.js';
 import type { ConversationLog, ReplayHooks, Settable } from './conversation.js';
 
 const prog = (source: string) => ({ kind: 'program' as const, source, js: source });
@@ -139,18 +139,6 @@ describe('coalesce — a sweep is one act, not thousands', () => {
   it('does not merge different targets', () => {
     const log: ConversationLog = [prog('one'), evt('p#1', 1), evt('p#2', 2)];
     expect(coalesce(log)).toHaveLength(3);
-  });
-});
-
-describe('isolate — the redeclaration trap', () => {
-  it('wraps a bare fragment so two turns can both declare `const spin`', () => {
-    expect(isolate('const spin = 1;')).toContain('(() => {');
-  });
-
-  it('leaves an already-wrapped iife alone, and is idempotent either way', () => {
-    const iife = '(() => { const spin = 1; })();';
-    expect(isolate(iife)).toBe(iife);
-    expect(isolate(isolate('const a = 1;'))).toBe(isolate('const a = 1;'));
   });
 });
 

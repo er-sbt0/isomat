@@ -22,7 +22,7 @@
  */
 
 import type { Derived, Id, World } from '@isomat/core';
-import type { Live } from '@isomat/lesson';
+import type { Live } from '@isomat/substrate';
 
 export type { Live };
 

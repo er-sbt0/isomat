@@ -1,6 +1,10 @@
 /**
  * tools.sandbox.test.ts — the whole instrument, played against real guest code.
  *
+ * PARKED at the workspace level (Stabilize §3.2/§3.3), with `tools.test.ts`:
+ * `tools.ts` is core-only and stays in `@isomat/host`, but these tests couple to
+ * `render`/`library`, so they run here until M2 lifts them into the copilot seam.
+ *
  * `tools.test.ts` proves the tool rules with an in-process scene and thunked
  * folds. This proves what thunks cannot: a scene a QuickJS program actually
  * built answers every probe — inspect, evalAt, whyChanged, counterfactual,
@@ -16,12 +20,12 @@ import { describe, expect, it } from 'vitest';
 import { createWorld } from '@isomat/core';
 import { createStage, sceneIndex, sceneManifest } from '@isomat/render';
 import { createProgramScope } from '@isomat/library';
-import { QuickJSHost } from './host.js';
-import { newNodeContext } from './node.js';
-import { isolate, replayLog } from './conversation.js';
-import type { ConversationLog, Settable } from './conversation.js';
-import { lint } from './lint.js';
+import { QuickJSHost } from '@isomat/host';
+import { newNodeContext } from '@isomat/host/node';
 import {
+  replayLog,
+  isolate,
+  lint,
   appendFragment,
   bisectFlip,
   counterfactual,
@@ -29,8 +33,8 @@ import {
   inspect,
   setInput,
   whyChanged,
-} from './tools.js';
-import type { CompileFragment, FoldScene, SceneMap } from './tools.js';
+} from '@isomat/host';
+import type { ConversationLog, Settable, CompileFragment, FoldScene, SceneMap } from '@isomat/host';
 
 /** Turn 1: a parameter, a derived, a claim over it, a field to sample. */
 const PROGRAM = [

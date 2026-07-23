@@ -1,6 +1,14 @@
 /**
  * tools.test.ts — the tool layer, with no sandbox in the way.
  *
+ * PARKED at the workspace level (Stabilize §3.2/§3.3): `tools.ts` is the 4c tool
+ * executor destined for a future `copilot` package (roadmap M2). It stays
+ * core-only in `@isomat/host`, but its tests couple to `render`/`library`, so
+ * they live here — the package that already owns those deps — rather than
+ * forcing them back into a host that now stands on `core` alone. M2 lifts both
+ * `tools.ts` and these tests into the copilot seam. Until then they exercise the
+ * still-present discipline scope and will be revised when S3 sheds it.
+ *
  * The scene is built IN-PROCESS: a real world, stage and program scope, driven
  * by direct library calls instead of QuickJS. That is the same split
  * conversation.test.ts made — the sibling `.sandbox.test.ts` proves the tools
@@ -13,10 +21,10 @@ import { createWorld } from '@isomat/core';
 import { createStage, sceneIndex } from '@isomat/render';
 import { createProgramScope } from '@isomat/library';
 import type { ProgramScope } from '@isomat/library';
-import { appendFragment, bisectFlip, counterfactual, evalAt, inspect, runTool, setInput, whyChanged } from './tools.js';
-import type { CompileFragment, FoldScene } from './tools.js';
-import { replayLog } from './conversation.js';
-import type { ConversationLog, Settable } from './conversation.js';
+import { appendFragment, bisectFlip, counterfactual, evalAt, inspect, runTool, setInput, whyChanged } from '@isomat/host';
+import type { CompileFragment, FoldScene } from '@isomat/host';
+import { replayLog } from '@isomat/host';
+import type { ConversationLog, Settable } from '@isomat/host';
 
 /**
  * One scene with something for every dispatch arm: a draggable parameter, a

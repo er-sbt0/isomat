@@ -56,6 +56,7 @@ import type {
   VaryPayload,
 } from '@isomat/lesson';
 import type { Stage } from './stage.js';
+import { collect } from './scene.js';
 import { labelOf } from './util.js';
 
 /** How a claim's verdict was reached — mirrors `ClaimEvidence` in the library. */
@@ -152,101 +153,9 @@ function labelIfNamed(h: Handle): string | undefined {
   return l === h.id ? undefined : l;
 }
 
-// ───────────────────────────── the timeline walk ─────────────────────────────
-
-/**
- * Every handle a step mentions, and whether the step makes it student-movable.
- *
- * `vary` counts as movable-adjacent but NOT draggable: the lesson moved it,
- * the student cannot. Only `expose` and `enableInteraction` hand over control,
- * and conflating them would tell a follow-up it may set something it cannot.
- */
-function collect(
-  node: TimelineNode,
-  seen: Map<Id, Handle>,
-  draggable: Set<Id>,
-  narration: string[],
-  retired: Set<Id>,
-): void {
-  if (node.type === 'cascade' || node.type === 'parallel' || node.type === 'loop') {
-    const children = (node as { children?: readonly TimelineNode[] }).children ?? [];
-    for (const c of children) collect(c, seen, draggable, narration, retired);
-    const iterations = (node as { iterations?: readonly TimelineNode[] }).iterations ?? [];
-    for (const c of iterations) collect(c, seen, draggable, narration, retired);
-    return;
-  }
-  if (node.type !== 'action') return;
-
-  const keep = (h: unknown): void => {
-    if (isHandle(h) && !seen.has(h.id)) seen.set(h.id, h);
-  };
-  const p = node.payload as Record<string, unknown> | undefined;
-  if (!p) return;
-
-  switch (node.op) {
-    case 'say': {
-      const say = p as unknown as SayPayload;
-      narration.push(say.strings.join('…').trim());
-      for (const m of say.mentions) keep(m);
-      return;
-    }
-    case 'show':
-      keep((p as unknown as ShowPayload).subject);
-      return;
-    case 'hide':
-      keep((p as unknown as HidePayload).subject);
-      return;
-    case 'retire': {
-      // Retired, not merely hidden: the object is out of the explanation, so a
-      // follow-up must not be offered it as something to reason about or move.
-      // This is the whole reason `retire` had to exist separately from `hide`.
-      retired.add((p as unknown as RetirePayload).subject.id);
-      return;
-    }
-    case 'replace': {
-      const r = p as unknown as ReplacePayload;
-      retired.add(r.old.id);
-      keep(r.next);
-      return;
-    }
-    case 'focus':
-      for (const s of (p as unknown as FocusPayload).subjects) keep(s);
-      return;
-    case 'vary':
-      keep((p as unknown as VaryPayload).target);
-      return;
-    case 'expose': {
-      const e = p as unknown as ExposePayload;
-      keep(e.subject);
-      draggable.add(e.subject.id);
-      return;
-    }
-    case 'enableInteraction': {
-      const i = (p as unknown as EnableInteractionPayload).interaction;
-      keep(i.target);
-      keep(i.along);
-      draggable.add(i.target.id);
-      return;
-    }
-    case 'link': {
-      const l = p as unknown as LinkPayload;
-      keep(l.a);
-      for (const t of l.targets) keep(t);
-      return;
-    }
-    default: {
-      // Every other verb (morph, demonstrate, buildUp, compareExperiment,
-      // transformFormula) carries handles under names this switch does not
-      // know. Sweep them generically rather than enumerating payload shapes
-      // that will drift — a manifest that silently misses new verbs is worse
-      // than one that occasionally names a handle the student cannot see.
-      for (const v of Object.values(p)) {
-        if (Array.isArray(v)) v.forEach(keep);
-        else keep(v);
-      }
-    }
-  }
-}
+// The timeline walk `collect` and the scene index `sceneIndex` moved to
+// `scene.ts` (Stabilize §2.1). `collect` is imported above; the prose manifest
+// below reuses it.
 
 // ─────────────────────────────── the manifest ───────────────────────────────
 
@@ -391,31 +300,5 @@ export function transitionFeed(
   };
 }
 
-/**
- * The id → handle index a program FRAGMENT resolves against (roadmap 4b).
- *
- * A turn-2 fragment compiles in its own scope, so it cannot see turn-1's
- * `const`s; it reaches back by id. There is no registry of minted handles to
- * look them up in, so the index is built from exactly the same walk the
- * manifest uses — which gives the reference the right boundary for free: a
- * fragment can name anything the manifest offered it and nothing else. Naming
- * an object the student was never shown would be authoring against a scene
- * that does not, as far as anyone can tell, exist.
- *
- * Retired objects are absent here too, so a fragment cannot resurrect one by
- * id. That is `retire` doing its job rather than a special case.
- */
-export function sceneIndex(stage: Stage): Map<Id, Handle> {
-  const seen = new Map<Id, Handle>();
-  const retired = new Set<Id>();
-  for (const node of stage.world.timeline.root) {
-    collect(node, seen, new Set(), [], retired);
-  }
-  for (const v of stage.views) {
-    if (retired.has(v.id)) continue;
-    seen.set(v.id, v as unknown as Handle);
-    for (const e of v.elements) if (!retired.has(e.id)) seen.set(e.id, e);
-  }
-  for (const id of retired) seen.delete(id);
-  return seen;
-}
+// `sceneIndex` moved to `scene.ts` (Stabilize §2.1) and is re-exported from
+// `index.ts` from there.

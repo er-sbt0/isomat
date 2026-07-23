@@ -44,9 +44,9 @@
  * of 'spin'` — a failure with nothing in it pointing at conversations. They do
  * not collide in the real pipeline, because `compileProgram` emits esbuild's
  * `format: 'iife'` and every turn arrives already wrapped in its own function
- * scope. `isolate()` below makes that requirement explicit rather than
- * incidental, and it is idempotent, so a fold may apply it to already-wrapped
- * output.
+ * scope. `isolate()` (now in `./scope.ts`) makes that requirement explicit
+ * rather than incidental, and it is idempotent, so a fold may apply it to
+ * already-wrapped output.
  *
  * The consequence is the one the design wanted anyway: a fragment cannot see
  * an earlier turn's bindings, so `M.byId` is the ONLY way to reach back. Ids
@@ -103,19 +103,6 @@ export interface EventEntry {
 export type LogEntry = ProgramEntry | FragmentEntry | EventEntry;
 
 export type ConversationLog = readonly LogEntry[];
-
-/**
- * Wrap a turn in its own function scope, unless it plainly already is one.
- *
- * The check is deliberately syntactic and conservative: wrapping twice is
- * harmless, so a false negative costs nothing, while failing to wrap costs a
- * redeclaration error on the next turn that reuses a name.
- */
-export function isolate(js: string): string {
-  const trimmed = js.trim();
-  if (/^\(\s*(\(\s*\)|function)/.test(trimmed) || trimmed.startsWith('(()=>')) return js;
-  return `(() => {\n${js}\n})();`;
-}
 
 // ─────────────────────────────── replay ───────────────────────────────
 

@@ -18,6 +18,7 @@
   "dependencies": {
     "@isomat/core": "workspace:*",
     "@isomat/lesson": "workspace:*",
+    "@isomat/substrate": "workspace:*",
     "katex": "^0.16.47"
   },
   "devDependencies": {

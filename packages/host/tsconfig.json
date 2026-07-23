@@ -5,5 +5,6 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["node"]
   },
-  "include": ["src", "verify/main.ts", "verify/guest-scope.ts", "verify/env.d.ts", "vitest.config.ts"]
+  "//": "verify/main.ts (a browser parity DEMO, built separately by verify/build.mjs) imports @isomat/render + @isomat/library, which host no longer depends on after the Stabilize host inversion (§3.4). It is dropped from the package typecheck so host stands on core alone; the harness is now orphaned pending the S5 verify/run.sh prune.",
+  "include": ["src", "verify/guest-scope.ts", "verify/env.d.ts", "vitest.config.ts"]
 }

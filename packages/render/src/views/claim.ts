@@ -13,7 +13,7 @@
  */
 
 import type { Handle } from '@isomat/core';
-import type { NumericHandle, Verdict } from '@isomat/lesson';
+import type { NumericHandle, Verdict } from '@isomat/substrate';
 import { View } from '../view.js';
 import type { Stage } from '../stage.js';
 import { fmt } from '../util.js';

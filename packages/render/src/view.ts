@@ -14,7 +14,7 @@
  */
 
 import type { Handle, Id } from '@isomat/core';
-import type { MorphSubject } from '@isomat/lesson';
+import type { MorphSubject } from '@isomat/substrate';
 import type { Stage } from './stage.js';
 
 export type PendingAnimation = (ms: number) => void | Promise<void>;

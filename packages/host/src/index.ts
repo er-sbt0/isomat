@@ -26,7 +26,8 @@ export { GUEST_PRELUDE } from './prelude.js';
 export { GuestError } from './protocol.js';
 export type { WireNode, HostCall } from './protocol.js';
 export { describeGuestError } from './guest-error.js';
-export { replayLog, commitEntry, foldSource, studentEvents, coalesce, isolate } from './conversation.js';
+export { replayLog, commitEntry, foldSource, studentEvents, coalesce } from './conversation.js';
+export { isolate } from './scope.js';
 export type {
   ConversationLog,
   LogEntry,
@@ -42,7 +43,16 @@ export type {
   Settable,
 } from './conversation.js';
 export type { GuestSite, GuestErrorDetail } from './guest-error.js';
-export { runTool, inspect, evalAt, whyChanged, counterfactual, bisectFlip } from './tools.js';
+export {
+  runTool,
+  inspect,
+  evalAt,
+  whyChanged,
+  counterfactual,
+  bisectFlip,
+  appendFragment,
+  setInput,
+} from './tools.js';
 export type {
   ToolCall,
   ToolResult,

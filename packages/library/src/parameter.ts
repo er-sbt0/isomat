@@ -13,7 +13,7 @@
  */
 
 import type { Id, World } from '@isomat/core';
-import type { VarySettable } from '@isomat/lesson';
+import type { VarySettable } from '@isomat/substrate';
 
 export interface Parameter extends VarySettable {
   readonly kind: 'parameter';

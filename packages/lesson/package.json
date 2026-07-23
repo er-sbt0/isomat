@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@isomat/core": "workspace:*"
+    "@isomat/core": "workspace:*",
+    "@isomat/substrate": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

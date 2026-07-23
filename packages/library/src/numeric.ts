@@ -15,7 +15,7 @@
  */
 
 import type { Id, World } from '@isomat/core';
-import type { NumericHandle } from '@isomat/lesson';
+import type { NumericHandle } from '@isomat/substrate';
 import { isLive, live, constLive } from './live.js';
 
 export interface LabeledNumber extends NumericHandle {
