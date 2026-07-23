@@ -46,7 +46,7 @@ export { runTurn } from './turn.js';
 export type { TurnOutcome, ManipulatedOutcome, AgenticOutcome, TurnStep, TurnDeps } from './turn.js';
 export { classify } from './classify.js';
 export type { Manipulation } from './classify.js';
-export { sceneBrief } from './brief.js';
+export { sceneBrief, scopedManifest } from './brief.js';
 export { ScriptedClient, SYSTEM_PROMPT, TOOL_SPECS } from './client.js';
 export type {
   ModelClient,
