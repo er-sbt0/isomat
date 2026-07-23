@@ -33,7 +33,7 @@ export class ReadoutView extends View {
 
   constructor(
     stage: Stage,
-    private readonly spec: ReadoutSpec,
+    readonly spec: ReadoutSpec,
   ) {
     super(stage, 'view:readout');
   }

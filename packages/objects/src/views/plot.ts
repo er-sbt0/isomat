@@ -52,7 +52,7 @@ export class PlotView extends FramedView {
 
   constructor(
     stage: Stage,
-    private readonly spec: PlotSpec,
+    readonly spec: PlotSpec,
   ) {
     super(stage, 'view:plot');
     const n = Math.max(2, spec.samples ?? DEFAULT_SAMPLES);

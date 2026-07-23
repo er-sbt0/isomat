@@ -1,13 +1,17 @@
-/* styles.css — minimal, legible chrome. W1 brings the real view components. */
+/* styles.css — chrome for the W1 view components. */
 
 :root {
   --bg: #fbfaf8;
+  --panel: #fff;
   --fg: #1e1c1a;
   --dim: #7a736c;
   --line: #e3ded7;
   --accent: #2f6f4f;
+  --curve: #2f6f4f;
   --user: #2f5f8f;
   --copilot: #7a4f8f;
+  --accept: #2f6f4f;
+  --reject: #a8402f;
   --fail: #a33;
   color-scheme: light dark;
 }
@@ -15,12 +19,16 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #16151a;
+    --panel: #1e1d24;
     --fg: #eceaf0;
     --dim: #9a95a3;
     --line: #2e2b35;
     --accent: #6fc79a;
+    --curve: #6fc79a;
     --user: #7fb3e8;
     --copilot: #c79ae8;
+    --accept: #6fc79a;
+    --reject: #e8907f;
     --fail: #e88;
   }
 }
@@ -37,7 +45,7 @@ body {
 }
 
 main {
-  max-width: 46rem;
+  max-width: 52rem;
   margin: 0 auto;
   padding: 2.5rem 1.5rem 4rem;
 }
@@ -49,7 +57,7 @@ h1 {
 }
 
 h2 {
-  margin: 2.25rem 0 0.75rem;
+  margin: 2.25rem 0 0.85rem;
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.09em;
@@ -67,100 +75,8 @@ code {
   font-size: 0.88em;
 }
 
-/* ── the log ── */
-
-ol.log {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-ol.log li {
-  display: flex;
-  gap: 0.6rem;
-  align-items: baseline;
-  padding: 0.55rem 0.8rem;
-  border-bottom: 1px solid var(--line);
-}
-
-ol.log li:last-child {
-  border-bottom: none;
-}
-
-.by {
-  flex: none;
-  width: 4.4rem;
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.by-user {
-  color: var(--user);
-}
-
-.by-copilot {
-  color: var(--copilot);
-}
-
-.kind {
-  flex: none;
-  width: 5.5rem;
-  color: var(--dim);
-  font-size: 0.82rem;
-}
-
-ol.log code {
-  color: var(--fg);
-  opacity: 0.85;
-  overflow-wrap: anywhere;
-}
-
-/* ── the fold result ── */
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-th,
-td {
-  text-align: left;
-  padding: 0.5rem 0.8rem;
-  border-bottom: 1px solid var(--line);
-}
-
-th {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--dim);
-  font-weight: 600;
-}
-
-tbody tr:last-child td {
-  border-bottom: none;
-}
-
 .dim {
   color: var(--dim);
-}
-
-.ok {
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.failed {
-  color: var(--fail);
-  font-weight: 600;
 }
 
 .pending {
@@ -168,16 +84,219 @@ tbody tr:last-child td {
   font-style: italic;
 }
 
-.note {
-  margin-top: 1rem;
-  padding: 0.75rem 0.9rem;
-  border-left: 3px solid var(--accent);
-  background: color-mix(in srgb, var(--accent) 7%, transparent);
-  border-radius: 0 6px 6px 0;
-  color: var(--dim);
-  font-size: 0.9rem;
+.failed {
+  color: var(--fail);
+  font-weight: 600;
 }
 
-.note code {
+/* ── inputs ── */
+
+.param {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  margin-bottom: 0.5rem;
+}
+
+.pname {
+  flex: none;
+  min-width: 2.5rem;
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.param input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+.param output {
+  flex: none;
+  min-width: 3rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.caveat {
+  margin: 0.6rem 0 0;
+  font-size: 0.85rem;
+  color: var(--dim);
+}
+
+/* ── the canvas ── */
+
+.canvas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.9rem;
+  align-items: start;
+}
+
+.obj {
+  margin: 0;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+/* NOT uppercased, unlike the section headings. These captions are object LABELS,
+   and in mathematics case carries meaning — `f` and `F` are different objects,
+   and `\Delta x` is not `\DELTA X`. Never text-transform authored math. */
+.obj figcaption {
+  font-size: 0.82rem;
+  color: var(--dim);
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* plot */
+
+.plot svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.plot .axis {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.plot .curve {
+  stroke: var(--curve);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.plot .domain {
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* readout */
+
+.readout .value {
+  font-size: 2rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  line-height: 1.1;
+}
+
+.readout .compare {
+  margin-top: 0.3rem;
+  font-size: 0.85rem;
+  color: var(--dim);
+}
+
+/* claim */
+
+.claim .verdict {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.badge {
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border: 1px solid currentColor;
+}
+
+.badge-accept {
+  color: var(--accept);
+}
+
+.badge-reject {
+  color: var(--reject);
+}
+
+.badge-neutral {
+  color: var(--dim);
+}
+
+.claim .sides {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.claim .rel {
+  color: var(--dim);
+  padding: 0 0.15rem;
+}
+
+/* Evidence is a first-class part of the claim, never decoration — the no-CAS
+   decision made visible. A predicate must not look like a proof. */
+.claim .evidence {
+  margin-top: 0.55rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--line);
+  font-size: 0.78rem;
+  color: var(--dim);
+}
+
+.claim .evidence code {
   color: var(--fg);
+  font-weight: 600;
+}
+
+.ev-sampled code,
+.ev-authored-predicate code {
+  color: var(--reject);
+}
+
+/* note / formula */
+
+.note p {
+  margin: 0;
+  color: var(--fg);
+}
+
+.mention {
+  display: inline-block;
+  padding: 0.05rem 0.4rem;
+  margin: 0 0.1rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--bg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
+.mvalue {
+  color: var(--accent);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.formula code {
+  font-size: 0.95rem;
+}
+
+/* ── footer ── */
+
+footer {
+  margin-top: 2rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.85rem;
+  color: var(--accent);
+  font-weight: 600;
 }

@@ -1,49 +1,66 @@
 /**
- * App.tsx — W0: prove the Phase-1 substrate folds inside a browser.
+ * App.tsx — W1: a folded workspace, rendered as native React components.
  *
- * This is deliberately not a UI. It boots QuickJS in the page, folds the demo
- * log, and prints what came back as text. Its entire job is to answer one
- * question — does the engine run client-side with zero edits — before W1 spends
- * any effort on components. If this fails, the Phase 2 plan is wrong and it is
- * much cheaper to find out here.
+ * W0 printed ids to prove the engine ran. This renders the workspace through the
+ * components in `views.tsx` and proves the REACTIVE BRIDGE: the slider does not
+ * append an act and does not re-fold. It pokes the parameter's slot in place via
+ * `setValueLive` and announces it with `bumpLive`, and everything downstream —
+ * the derived readout, the curve, the claim's verdict — follows through the
+ * engine's own graph.
  *
- * The values below are read live off the folded handles, which means the guest
- * closures in the VM are being re-invoked from React. `y = 9` (not 4) is the
- * load-bearing number on screen: it proves the `set-input` act propagated
- * through the reactive graph inside the sandbox, not just that objects exist.
+ * That is deliberately the WEAKER half of co-edit. A live poke is not a co-edit
+ * act: it leaves no trace in the log, so it is not attributable, not undoable and
+ * not something the copilot can see. W2 promotes these into real `SetInputAct`s
+ * through `commit`, with `coalesce` collapsing a drag into one act. Until then
+ * the slider is labelled for what it is.
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Handle, Id } from '@isomat/core';
-import type { Position, Workspace } from '@isomat/workspace';
+import type { Workspace } from '@isomat/workspace';
 import { fold } from '@isomat/workspace/browser';
 import { DEMO_LOG } from './demo-log.js';
+import { bumpLive, useLive } from './live.js';
+import { ViewOf, isRenderableView } from './views.js';
 
 type Status =
   | { phase: 'folding' }
   | { phase: 'ok'; workspace: Workspace; ms: number }
   | { phase: 'failed'; message: string };
 
-/** Best-effort description of a folded handle — these are heterogeneous by design. */
-function describe(h: Handle): { label?: string; value?: string; kind?: string } {
-  const anyH = h as unknown as { label?: unknown; value?: unknown; kind?: unknown };
-  const out: { label?: string; value?: string; kind?: string } = {};
-  if (typeof anyH.label === 'string') out.label = anyH.label;
-  if (typeof anyH.kind === 'string') out.kind = anyH.kind;
-  try {
-    const v = anyH.value;
-    if (typeof v === 'number' || typeof v === 'boolean' || typeof v === 'string') {
-      out.value = String(v);
-    }
-  } catch {
-    // A lazily-materialising view can throw on read (errors-as-data). Not fatal
-    // here — W0 only claims the object EXISTS.
-    out.value = '(unreadable)';
-  }
-  return out;
+/** A parameter is the interaction-mutable scalar — the thing a user can drag. */
+interface ParamLike extends Handle {
+  readonly label: string;
+  readonly range: readonly [number, number];
+  readonly value: number;
+  setValueLive(next: number): void;
 }
 
-const fmtPos = (p: Position | undefined) => (p ? `(${p.x}, ${p.y})` : '—');
+const isParam = (h: Handle): h is ParamLike => h.kind === 'parameter';
+
+function ParamSlider({ param }: { param: ParamLike }) {
+  const value = useLive<number>(param) ?? param.value;
+  const [lo, hi] = param.range;
+
+  const onChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      // The interaction path: clamp-and-poke, no timeline step, no act.
+      param.setValueLive(Number(e.target.value));
+      // A Parameter exposes no subscribable Slot by design, so the bridge's
+      // fallback channel is what tells React anything happened. See live.ts.
+      bumpLive();
+    },
+    [param],
+  );
+
+  return (
+    <label className="param">
+      <span className="pname">{param.label}</span>
+      <input type="range" min={lo} max={hi} step={0.1} value={value} onChange={onChange} />
+      <output>{Number.isInteger(value) ? value : value.toFixed(1)}</output>
+    </label>
+  );
+}
 
 export function App() {
   const [status, setStatus] = useState<Status>({ phase: 'folding' });
@@ -58,7 +75,10 @@ export function App() {
         setStatus(
           out.ok
             ? { phase: 'ok', workspace: out.workspace, ms }
-            : { phase: 'failed', message: `act ${out.failure.index} (${out.failure.kind}): ${out.failure.message}` },
+            : {
+                phase: 'failed',
+                message: `act ${out.failure.index} (${out.failure.kind}): ${out.failure.message}`,
+              },
         );
       })
       .catch((e: unknown) => {
@@ -69,77 +89,71 @@ export function App() {
     };
   }, []);
 
+  if (status.phase === 'folding') {
+    return (
+      <main>
+        <Header />
+        <p className="pending">booting QuickJS and folding…</p>
+      </main>
+    );
+  }
+
+  if (status.phase === 'failed') {
+    return (
+      <main>
+        <Header />
+        <p className="failed">FAILED — {status.message}</p>
+      </main>
+    );
+  }
+
+  const objects = [...status.workspace.objects.entries()] as Array<[Id, Handle]>;
+  const params = objects.map(([, h]) => h).filter(isParam);
+  const views = objects.map(([, h]) => h).filter(isRenderableView);
+
   return (
     <main>
-      <header>
-        <h1>isomat</h1>
-        <p className="sub">
-          W0 — <code>fold(log) &rarr; Workspace</code>, running entirely in this page.
+      <Header />
+
+      <section>
+        <h2>Inputs</h2>
+        {params.map((p) => (
+          <ParamSlider key={p.id} param={p} />
+        ))}
+        <p className="caveat">
+          Live poke — <code>setValueLive</code>, no act appended and no re-fold. W2 promotes this
+          into a <code>SetInputAct</code> through <code>commit</code>.
         </p>
-      </header>
+      </section>
 
       <section>
-        <h2>The log ({DEMO_LOG.length} acts)</h2>
-        <ol className="log">
-          {DEMO_LOG.map((act, i) => (
-            <li key={i}>
-              <span className={`by by-${act.by}`}>{act.by}</span>
-              <span className="kind">{act.kind}</span>
-              <code>
-                {act.kind === 'introduce' || act.kind === 'author'
-                  ? act.js.split('\n')[0] + (act.js.includes('\n') ? ' …' : '')
-                  : act.kind === 'set-input'
-                    ? `${act.target} = ${act.value}`
-                    : ''}
-              </code>
-            </li>
+        <h2>Workspace</h2>
+        <div className="canvas">
+          {views.map((v) => (
+            <ViewOf key={v.id} handle={v} />
           ))}
-        </ol>
+        </div>
       </section>
 
-      <section>
-        <h2>The fold</h2>
-        {status.phase === 'folding' && <p className="pending">booting QuickJS and folding…</p>}
-        {status.phase === 'failed' && <p className="failed">FAILED — {status.message}</p>}
-        {status.phase === 'ok' && (
-          <>
-            <p className="ok">
-              folded {DEMO_LOG.length} acts &rarr; {status.workspace.objects.size} objects in {status.ms}ms
-            </p>
-            <table>
-              <thead>
-                <tr>
-                  <th>id</th>
-                  <th>label</th>
-                  <th>value</th>
-                  <th>position</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...status.workspace.objects.entries()].map(([id, h]: [Id, Handle]) => {
-                  const d = describe(h);
-                  return (
-                    <tr key={id}>
-                      <td>
-                        <code>{id}</code>
-                      </td>
-                      <td>{d.label ?? d.kind ?? '—'}</td>
-                      <td>{d.value ?? '—'}</td>
-                      <td className="dim">{fmtPos(status.workspace.layout.get(id))}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            <p className="note">
-              <code>a@1 = 3</code> because the user&rsquo;s <code>set-input</code> act applied;{' '}
-              <code>y@2 = 9</code> because that change propagated through the reactive graph
-              <em> inside the sandbox</em>. That second number is the one that proves the engine
-              really ran.
-            </p>
-          </>
-        )}
-      </section>
+      <footer>
+        folded {DEMO_LOG.length} acts &rarr; {status.workspace.objects.size} objects in {status.ms}ms
+        <span className="dim">
+          {' '}
+          · {views.length} views · {params.length} input{params.length === 1 ? '' : 's'}
+        </span>
+      </footer>
     </main>
+  );
+}
+
+function Header() {
+  return (
+    <header>
+      <h1>isomat</h1>
+      <p className="sub">
+        W1 — <code>fold(log)</code> rendered as React components; drag an input and the reactive
+        graph carries it.
+      </p>
+    </header>
   );
 }

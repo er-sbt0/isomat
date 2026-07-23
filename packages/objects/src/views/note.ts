@@ -29,7 +29,7 @@ export interface NoteSpec {
 export class NoteView extends View {
   constructor(
     stage: Stage,
-    private readonly spec: NoteSpec,
+    readonly spec: NoteSpec,
   ) {
     super(stage, 'view:note');
   }

@@ -27,7 +27,14 @@ const INTRODUCE_A: WorkspaceAct = {
   js: 'const a = param("a", 2, { range: [-5, 5], id: "a@1" });',
 };
 
-/** author: reach `a` back by id, derive y = a² (stable id `y@2`), plot f(x) = a·x. */
+/**
+ * author: reach `a` back by id, derive y = a² (stable id `y@2`), plot f(x) = a·x.
+ *
+ * The claim is here for W1 rather than the original test's sake: it is the one
+ * object whose rendering has to carry EVIDENCE TYPE, and a workspace without one
+ * lets the UI look finished while quietly dropping the guarantee the whole
+ * project is built on.
+ */
 const AUTHOR_Y: WorkspaceAct = {
   kind: 'author',
   by: 'copilot',
@@ -35,8 +42,15 @@ const AUTHOR_Y: WorkspaceAct = {
   js: [
     'const a = byId("a@1");',
     'const y = derive(() => a.value * a.value, { label: "y = a^2", id: "y@2" });',
-    'plot((x) => a.value * x, { domain: [-5, 5], label: "f" });',
+    'plot((x) => a.value * x, { domain: [-5, 5], label: "f(x) = a·x" });',
     'readout(y, { label: "y" });',
+    // `claim` registers the OBJECT only — no view. That is deliberate: building
+    // a view here would read `holds` and evaluate a possibly-throwing predicate
+    // at construction, and a verdict is read lazily so an error stays data. The
+    // renderer materialises the claim from the scene (scope.ts), which is
+    // exactly what the React `<Claim>` component does.
+    'claim({ lhs: y, rhs: 9, relation: "=", label: "y = 9" });',
+    'note`Drag ${a} and watch ${y} follow.`;',
   ].join('\n'),
 };
 

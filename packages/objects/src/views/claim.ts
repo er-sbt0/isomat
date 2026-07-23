@@ -59,7 +59,7 @@ export class ClaimView extends View {
 
   constructor(
     stage: Stage,
-    private readonly spec: ClaimSpec,
+    readonly spec: ClaimSpec,
   ) {
     super(stage, 'view:claim');
   }
