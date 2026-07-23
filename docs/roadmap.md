@@ -202,17 +202,51 @@ cassette deferred to M5's flagship session. What landed in `packages/copilot`:
 actually paid (M2a) — then the loop around it, free and deterministic (M2b). The one
 billed real-Claude session is deferred to M5 as the flagship cassette.
 
-### M3 — Parser front door + introduce/edit
-`packages/parse`. The riskiest new seam.
-- mathjs for parse + numeric eval; wrap its AST into the addressable span tree (target shape = `formula.ts`'s `F.tex` spans).
-- **Fence off** mathjs symbolic/simplify APIs behind a wrapper — the no-CAS boundary.
-- `introduce` act: LaTeX → live object (span tree + numeric evaluator feeding `View.plot`'s `samplerFor`). `edit-span` act: in-place term edit.
-- **Exit:** type `x^2 + a*x` → live object, plot renders headless, drag `a` updates; edit a span's tex → re-parse + dependents recompute + id stable; a guard test asserts no symbolic call escapes the wrapper.
-- **Watches:** parser scope creep toward a CAS. The fence test is the mitigation.
+### M3 — Parser front door ✅ DONE (2026-07-23)
+`packages/parse`. The riskiest new seam. Decisions taken at the start:
+**mathjs** (honor decision #3) and **edit-span deferred to M4** (below).
+
+What landed:
+- `parseExpr(text) → ParsedExpr`: math text (mathjs syntax, NOT LaTeX) → display
+  TeX + an addressable span tree (`{ tex, role? }`, the `formula.ts` shape, top-level
+  additive terms role-named `term0`/`term1`) + the free variables + a numeric
+  sampler emitter. The AST is WALKED (`ast.ts`), never simplified/differentiated.
+- **The integration is the "LaTeX → source front door" `act.ts` promised, not a new
+  fold path:** `introduceExpr(...)` emits SANDBOX JS (`plot((x) => Math.pow(x,2) +
+  v0.value*x, { … , id })`, bound free vars reached by `byId`) and packages it as an
+  ordinary `IntroduceAct`. The existing fold runs it in QuickJS. **Numeric eval
+  therefore happens in the sandbox** (one lint-gated, deterministic evaluation
+  site), NOT in a host-side mathjs — a deliberate reading of "mathjs for parse +
+  numeric eval": mathjs parses; the sandbox evaluates the emitted arithmetic.
+- The no-CAS fence: `mathjs.ts` is the SOLE importer of mathjs and imports only
+  `parse`; `fence.test.ts` fails the build if anything else imports mathjs, if the
+  runtime import brings in more than `parse`, or if any CAS op name (simplify/
+  derivative/rationalize/resolve/evaluate/…) appears in a mathjs import anywhere.
+  The arithmetic grammar (numbers, vars, + − × ÷, ^, unary minus, parens, a
+  sin/cos/tan/exp/log/sqrt/abs whitelist) throws on anything outside it — the
+  no-CAS line enforced at parse time, not trusted.
+- Small additive change to `@isomat/objects`: `PlotOpts.id?` threads a stable id
+  through `plot` → the `fn` handle (the same seam `param`/`derive` already carry),
+  so an introduced curve survives re-fold and is reachable by id.
+- **Exit (met):** `x^2 + a*x` → a live plotted object folded through QuickJS; the
+  sampler evaluates the real arithmetic (12 at x=3,a=1); a `set-input` on `a` +
+  re-fold updates it (15 at x=3,a=2 — "drag updates" IS re-fold, since a plot
+  samples once per fold); the fn id is stable across the re-fold; the fence guard
+  asserts no symbolic call escapes. **typecheck 8/8, 363 tests** (+16).
+- **Deferred to M4 (deviation from the original exit):** `edit-span` (in-place term
+  edit → re-parse + dependents recompute + id stable). It is the SAME
+  id-stability-under-mutation problem M4's `replace` is built around; consolidated
+  there so it is solved once. The span tree M3 produces is already the shape it
+  edits.
+- **Watches (held):** parser scope-creep toward a CAS. The fence test is the
+  mitigation, and mathjs is now imported behind exactly one `parse`-only wall.
 
 ### M4 — Spatial verbs + selective manifest
 The workspace becomes genuinely spatial and large-notebook-ready.
 - Add `move`, `retire`, `replace` acts; fold into `layout` / `retired` projections.
+- **`edit-span`** (moved here from M3): edit a parsed expression's span tex →
+  re-parse (via `@isomat/parse`) + dependents recompute + **id stable**. Same
+  id-stability-under-mutation core as `replace`; solve both together here.
 - Checkpoint compaction **real trigger** (every N acts or byte budget): fold prefix → synthesized `author` act, ids preserved → replay stays `O(acts since checkpoint)`.
 - `scopedManifest(workspace, focus, byteBudget)`: bounded BFS over `CorrespondenceGraph.neighbors`/`reachable`, nearest-first fill.
 - **Exit:** a 30-object workspace yields a scoped manifest under budget containing the focus neighborhood and excluding far objects; `replace` is atomic (reject → intact); a 100-act log folds cheaply and stays deterministic across a checkpoint.

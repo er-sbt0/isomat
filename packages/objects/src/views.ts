@@ -31,6 +31,13 @@ export interface PlotOpts {
   readonly domain: readonly [number, number];
   readonly showAxes?: boolean;
   readonly label?: string;
+  /**
+   * A stable id for the plotted `fn` handle (roadmap M3). An `introduce` act's
+   * emitted source stamps this so the object survives re-fold and a later act
+   * can reach it by id — the same stable-id seam `param`/`derive` already carry.
+   * Omit it and the id stays positional.
+   */
+  readonly id?: string;
 }
 
 export interface NativeViewLib {
@@ -82,8 +89,8 @@ export interface PlottedFn extends Handle<'fn'> {
   at(x: number): number;
 }
 
-function plottedFn(stage: Stage, rule: (x: number) => number, label?: string): PlottedFn {
-  const base = stage.world.handle('fn');
+function plottedFn(stage: Stage, rule: (x: number) => number, label?: string, id?: string): PlottedFn {
+  const base = stage.world.handle('fn', id);
   return Object.freeze({
     id: base.id,
     kind: 'fn' as const,
@@ -104,7 +111,7 @@ export function createViews(stage: Stage): { View: NativeViewLib } {
             'M3 parser. Pass a numeric rule: plot((x) => a.value * x, { domain }).',
         );
       }
-      const fn = plottedFn(stage, subject, opts.label);
+      const fn = plottedFn(stage, subject, opts.label, opts.id);
       return new PlotView(stage, {
         subject: fn,
         sample: (x) => subject(x),

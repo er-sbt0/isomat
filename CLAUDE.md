@@ -22,7 +22,7 @@ key, no billed path exists in the repo today.
 
 ## The package DAG — acyclic, depth 3
 ```
-core → substrate / sandbox / objects → workspace → copilot    ← the product path
+core → substrate / sandbox / objects → workspace → copilot / parse   ← the product path
 cell/    ← ALL demoted playback, OFF the main DAG (nothing on the path imports it)
 ```
 - **core** — identity/stable-ids, reactive graph (`Slot`/`Derived`/`Collection`/
@@ -45,6 +45,11 @@ cell/    ← ALL demoted playback, OFF the main DAG (nothing on the path imports
   loop — `runTurn(log, question, client, deps)` with a deterministic classifier
   fast-path (zero model calls), the `ModelClient` seam + free `ScriptedClient` fake,
   the `sceneBrief` manifest, and structural evidence-grounding. Both **done**.
+- **parse** (M3) — the parser front door: `parseExpr(text)` → TeX + addressable span
+  tree + emitted sandbox sampler; `introduceExpr(...)` → an `IntroduceAct` the fold
+  runs in QuickJS (numeric eval stays in the sandbox). mathjs is walled behind
+  `mathjs.ts` (imports only `parse`); `fence.test.ts` is the no-CAS guard. **Done**;
+  `edit-span` deferred to M4.
 - **cell/** (quarantine) — lesson verbs, morph, player/segments/events, prose
   manifest, playback-only views. Kept building + tested, but **off the DAG**.
 
@@ -66,23 +71,26 @@ to reconsider, not to relax the fence.
 
 ## Status (2026-07-23)
 **M0** (substrate lift), **M1** (`workspace` fold), **Stabilize** (decouple from
-math-ai's lesson concepts), and **M2** (copilot — **M2a** executor ↔ workspace seam
-+ **M2b** the loop, classifier, `ModelClient` seam / `ScriptedClient` fake) are all
-**DONE and committed**. Green: typecheck 7/7, **347 tests**. Working tree clean.
-The one billed real-Claude session is deferred to M5 (flagship cassette); everything
-M2 proves runs free with the scripted fake client.
+math-ai's lesson concepts), **M2** (copilot — **M2a** executor ↔ workspace seam +
+**M2b** the loop, classifier, `ModelClient` seam / `ScriptedClient` fake), and **M3**
+(the `parse` front door — mathjs walled to `parse`-only, `introduceExpr` → sandbox
+fold, no-CAS fence) are all **DONE and committed**. Green: typecheck 8/8, **363
+tests**. Working tree clean. The one billed real-Claude session is deferred to M5
+(flagship cassette); everything so far runs free.
 
 ## The plan
 - `docs/roadmap.md` — the living plan. **Read it first.** Milestones M0/M1/Stabilize
   are marked done; M2–M5 + Phase 2 (UI) are ahead.
 - `docs/stabilize-plan.md` — the executed file-level Stabilize demolition plan.
 
-**NEXT: M3** — the parser front door (`packages/parse`): mathjs for parse + numeric
-eval, wrapped into an addressable span tree (target shape = `objects/formula.ts`'s
-`F.tex` spans), with the symbolic/simplify APIs **fenced off** (the no-CAS line). Adds
-the `introduce` act (LaTeX → live object) and `edit-span` (in-place term edit). The
-riskiest new seam — watch for parser scope-creep toward a CAS; the fence test is the
-mitigation. See roadmap M3. (M2's real-Claude cassette is deferred to M5.)
+**NEXT: M4** — spatial verbs + selective manifest. Add `move`/`retire`/`replace`
+acts (fold into `layout`/`retired`), **`edit-span`** (moved from M3: edit a parsed
+span's tex → re-parse via `@isomat/parse` + dependents recompute + id stable — the
+same id-stability-under-mutation core as `replace`, solved together), real
+checkpoint-compaction trigger, and `scopedManifest(workspace, focus, byteBudget)`
+(bounded BFS over the correspondence graph — the `sceneBrief` in `copilot` is the
+unbounded precursor). Watches: id stability under `replace`/`edit-span`; compaction
+determinism. See roadmap M4. (M2's real-Claude cassette is deferred to M5.)
 
 ## Locked decisions
 - **No CAS.** The LLM reasons (fallibly); the engine makes math manipulable/visible/
