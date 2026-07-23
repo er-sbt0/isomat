@@ -1,10 +1,10 @@
-# erdos
+# isomat
 
 Proof visualizer and math ↔ LLM interface layer.
 
 ## Purpose
 
-`erdos` explores the boundary between formal mathematics and large language
+`isomat` explores the boundary between formal mathematics and large language
 models. It provides:
 
 - **Proof visualization** — render mathematical proofs as navigable, step-by-step
