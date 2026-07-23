@@ -20,6 +20,8 @@ export type {
   AuthorAct,
   IntroduceAct,
   SetInputAct,
+  MoveAct,
+  RetireAct,
   WorkspaceAct,
   WorkspaceLog,
   ExecutableAct,

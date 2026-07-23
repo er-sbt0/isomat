@@ -33,16 +33,18 @@ import type { ExecutableAct, Position, WorkspaceAct, WorkspaceLog } from './act.
  * where each introduced one sits, and the correspondence graph relating them.
  *
  * `objects` is the same manifest boundary `sceneIndex` draws for a lesson — an
- * object is reachable iff it was shown, and a retired one (M4) is absent — so a
- * later act's `M.byId` can name exactly what the workspace offers and nothing
- * else. `claims` / `retired` are deferred to M4 (see the note at the bottom):
- * M1 keeps the Workspace to the three projections the three verbs actually
- * populate.
+ * object is reachable iff it was shown. `retired` (M4's `retire` verb) is a
+ * filter-projection *over* `objects`: a retired object stays live in `objects`
+ * and `graph` (so a later `M.byId` still resolves it and dependents keep
+ * recomputing) but is flagged as no longer offered — the UI and the loop honor
+ * the flag. `claims` (evidence-typed propositions) remains deferred: no verb yet
+ * produces one the fold must track (see the note at the bottom).
  */
 export interface Workspace {
   readonly objects: ReadonlyMap<Id, Handle>;
   readonly layout: ReadonlyMap<Id, Position>;
   readonly graph: CorrespondenceGraph;
+  readonly retired: ReadonlySet<Id>;
 }
 
 /** What a `set-input` act needs of its target: the interaction-path setter. */
@@ -80,6 +82,7 @@ export type FoldOutcome =
  */
 export function foldLog(log: WorkspaceLog, hooks: FoldHooks): FoldOutcome {
   const layout = new Map<Id, Position>();
+  const retired = new Set<Id>();
 
   for (let index = 0; index < log.length; index += 1) {
     const act = log[index]!;
@@ -106,6 +109,29 @@ export function foldLog(log: WorkspaceLog, hooks: FoldHooks): FoldOutcome {
         case 'set-input':
           applySetInput(act.target, act.value, hooks.scene());
           break;
+        case 'move':
+          // A pure-projection move: the target must exist in the scene as it now
+          // stands. An absent target is a FAILURE, not a skip — same rule the
+          // `introduce` id-check and `set-input` enforce.
+          if (!hooks.scene().has(act.target)) {
+            throw new Error(
+              `move names "${act.target}", which is not in the workspace at this point in the log. ` +
+                `An act may only reference something that exists when it is folded.`,
+            );
+          }
+          layout.set(act.target, act.at);
+          break;
+        case 'retire':
+          // A pure-projection retire: flag an existing object as no longer
+          // offered. It stays in `objects`/`graph`; only the `retired` set grows.
+          if (!hooks.scene().has(act.target)) {
+            throw new Error(
+              `retire names "${act.target}", which is not in the workspace at this point in the log. ` +
+                `An act may only reference something that exists when it is folded.`,
+            );
+          }
+          retired.add(act.target);
+          break;
       }
     } catch (err) {
       return {
@@ -117,7 +143,7 @@ export function foldLog(log: WorkspaceLog, hooks: FoldHooks): FoldOutcome {
 
   return {
     ok: true,
-    workspace: { objects: hooks.scene(), layout, graph: hooks.graph() },
+    workspace: { objects: hooks.scene(), layout, graph: hooks.graph(), retired },
   };
 }
 
@@ -147,12 +173,13 @@ function applySetInput(target: Id, value: number, scene: ReadonlyMap<Id, Handle>
 }
 
 /*
- * DEFERRED to M4, deliberately (kept out of the M1 Workspace):
+ * STILL DEFERRED (kept out of the Workspace until a verb populates it):
  *  - `claims`   — evidence-typed propositions. Cheap to project (filter objects
- *                 by kind), but no M1 verb produces one the fold must track, and
+ *                 by kind), but no verb yet produces one the fold must track, and
  *                 the 4c loop (M2) is what will actually read them.
- *  - `retired`  — populated by the `retire` verb, which is M4. With no verb to
- *                 fill it, a `retired` projection would be a permanently empty
- *                 field pretending at an ontology that does not exist yet —
- *                 exactly the speculation the act set avoids.
+ *
+ * `retired` is now live (M4 Stage A): the `retire` verb fills it. It was held
+ * back in M1 for exactly the reason `claims` still is — a field with no verb to
+ * populate it is a permanently empty projection pretending at an ontology that
+ * does not exist yet.
  */

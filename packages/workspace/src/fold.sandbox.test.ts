@@ -130,6 +130,43 @@ describe('a hand-built co-edit log, folded through QuickJS', () => {
     if (check.ok) expect(numAt(check.workspace.objects, 'a@1')).toBe(1);
   });
 
+  it('a move relocates a live object, and a retire flags it while it stays live (M4 Stage A)', async () => {
+    const to = { x: 500, y: 600 };
+    const log: WorkspaceLog = [
+      INTRODUCE_A,
+      AUTHOR_Y,
+      { kind: 'move', by: 'user', turn: 3, target: 'a@1', at: to },
+      { kind: 'retire', by: 'copilot', turn: 4, target: 'y@2' },
+    ];
+    const out = await fold(log);
+    expect(out.ok ? 'ok' : out.failure.message).toBe('ok');
+    if (!out.ok) return;
+    const { objects, layout, retired } = out.workspace;
+
+    // move overwrote the layout position the introduce recorded
+    expect(layout.get('a@1')).toEqual(to);
+
+    // retire flagged y@2 but left it live: still in objects, still computing 2² = 4
+    expect(retired.has('y@2')).toBe(true);
+    expect(objects.has('y@2')).toBe(true);
+    expect(numAt(objects, 'y@2')).toBe(4);
+
+    // a@1 was moved, not retired
+    expect(retired.has('a@1')).toBe(false);
+  });
+
+  it('a move/retire on an unknown id leaves the prior log untouched (one transaction)', async () => {
+    const log: WorkspaceLog = [INTRODUCE_A, AUTHOR_Y];
+    const BAD: WorkspaceAct = { kind: 'move', by: 'user', turn: 3, target: 'ghost@9', at };
+    const committed = await commit(log, BAD, tryFold);
+    expect(committed.ok).toBe(false);
+    expect(committed.log).toBe(log); // same reference — nothing half-applied
+    if (!committed.ok) expect(committed.errors[0]).toContain('ghost@9');
+    // the prior log still folds cleanly
+    const still = await fold(committed.log);
+    expect(still.ok).toBe(true);
+  });
+
   it('re-folding the same log yields identical ids (the cassette property, criterion 4)', async () => {
     const log: WorkspaceLog = [INTRODUCE_A, AUTHOR_Y, setA(2)];
     const a = await fold(log);

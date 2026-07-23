@@ -110,6 +110,72 @@ describe('foldLog — the three verbs, against a stub world', () => {
   });
 });
 
+describe('foldLog — the spatial verbs move / retire (M4 Stage A)', () => {
+  it('a move relocates layout[target] to the new position', () => {
+    const s = stub();
+    const to = { x: 99, y: 88 };
+    const out = foldLog(
+      [intro('a@1'), { kind: 'move', by: 'user', turn: 2, target: 'a@1', at: to }],
+      s.hooks,
+    );
+    expect(out.ok).toBe(true);
+    if (out.ok) {
+      expect(out.workspace.layout.get('a@1')).toEqual(to);
+      // the object itself is untouched — a move is pure projection
+      expect(out.workspace.objects.has('a@1')).toBe(true);
+    }
+  });
+
+  it('a move naming an absent target is a FAILURE, not a skip', () => {
+    const s = stub();
+    const out = foldLog(
+      [{ kind: 'move', by: 'user', turn: 1, target: 'ghost@9', at: { x: 1, y: 2 } }],
+      s.hooks,
+    );
+    expect(out.ok).toBe(false);
+    if (!out.ok) {
+      expect(out.failure).toMatchObject({ index: 0, kind: 'move' });
+      expect(out.failure.message).toContain('ghost@9');
+      expect(out.failure.message).toContain('not in the workspace');
+    }
+  });
+
+  it('a retire adds the id to workspace.retired and leaves objects/graph intact', () => {
+    const s = stub();
+    const out = foldLog(
+      [intro('a@1'), { kind: 'retire', by: 'copilot', turn: 2, target: 'a@1' }],
+      s.hooks,
+    );
+    expect(out.ok).toBe(true);
+    if (out.ok) {
+      expect(out.workspace.retired.has('a@1')).toBe(true);
+      // retire is a filter-projection: the object stays live in objects and graph
+      expect(out.workspace.objects.has('a@1')).toBe(true);
+      expect(out.workspace.graph).toBe(s.graph);
+    }
+  });
+
+  it('a retire naming an absent target is a FAILURE, not a skip', () => {
+    const s = stub();
+    const out = foldLog(
+      [{ kind: 'retire', by: 'user', turn: 1, target: 'ghost@9' }],
+      s.hooks,
+    );
+    expect(out.ok).toBe(false);
+    if (!out.ok) {
+      expect(out.failure).toMatchObject({ index: 0, kind: 'retire' });
+      expect(out.failure.message).toContain('ghost@9');
+    }
+  });
+
+  it('retired starts empty when no retire act is folded', () => {
+    const s = stub();
+    const out = foldLog([intro('a@1')], s.hooks);
+    expect(out.ok).toBe(true);
+    if (out.ok) expect(out.workspace.retired.size).toBe(0);
+  });
+});
+
 describe('commit — the one-transaction rule', () => {
   it('a rejected candidate returns the PRIOR log, untouched (referentially)', async () => {
     const log: WorkspaceLog = [intro('a@1')];
@@ -124,7 +190,7 @@ describe('commit — the one-transaction rule', () => {
     const log: WorkspaceLog = [intro('a@1')];
     const tryFold = vi.fn(async (c: WorkspaceLog) => ({
       ok: true as const,
-      workspace: { objects: new Map(), layout: new Map(), graph: new CorrespondenceGraph() },
+      workspace: { objects: new Map(), layout: new Map(), graph: new CorrespondenceGraph(), retired: new Set<Id>() },
     }));
     const act: WorkspaceAct = { kind: 'set-input', by: 'user', turn: 2, target: 'a@1', value: 3 };
     const res = await commit(log, act, tryFold);

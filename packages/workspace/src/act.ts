@@ -100,7 +100,31 @@ export interface SetInputAct extends Tagged {
   readonly value: number;
 }
 
-export type WorkspaceAct = AuthorAct | IntroduceAct | SetInputAct;
+/**
+ * Relocate an existing object to a new canvas position (M4). A pure-projection
+ * verb: it runs no source, only overwrites `layout[target]`. The target must be
+ * in the scene as it now stands — a `move` naming an absent object is a FAILURE,
+ * never a skip, exactly as `set-input` is (see fold.ts).
+ */
+export interface MoveAct extends Tagged {
+  readonly kind: 'move';
+  readonly target: Id;
+  readonly at: Position;
+}
+
+/**
+ * Retire an existing object from the workspace (M4). A pure-projection verb: the
+ * object stays live in `objects`/`graph` (so a later `M.byId` still resolves it
+ * and dependents keep recomputing) — `retire` only adds its id to the workspace's
+ * `retired` filter-projection, which the UI and the loop honor. The target must
+ * be in the scene as it now stands; retiring an absent id is a FAILURE.
+ */
+export interface RetireAct extends Tagged {
+  readonly kind: 'retire';
+  readonly target: Id;
+}
+
+export type WorkspaceAct = AuthorAct | IntroduceAct | SetInputAct | MoveAct | RetireAct;
 
 export type WorkspaceLog = readonly WorkspaceAct[];
 
