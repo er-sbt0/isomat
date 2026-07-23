@@ -1,11 +1,11 @@
 # isomat — build roadmap
 
-> Status: **planning (2026-07-23).** Nothing below is built yet. This roadmap
-> implements the *co-edit workspace* model — the MathCopilot flagship redesign —
-> as isomat's foundation. The README frames isomat as "the math ↔ LLM interface
-> layer other projects build on"; that layer **is** the workspace substrate here.
-> Proof visualization (`qed`) and content (`undergrad`) become consumers of the
-> same object / correspondence / evidence substrate, not separate stacks.
+> Status: **M0–M4 DONE (2026-07-23); NEXT is M5.** This roadmap implements the
+> *co-edit workspace* model — the MathCopilot flagship redesign — as isomat's
+> foundation. The README frames isomat as "the math ↔ LLM interface layer other
+> projects build on"; that layer **is** the workspace substrate here. Proof
+> visualization (`qed`) and content (`undergrad`) become consumers of the same
+> object / correspondence / evidence substrate, not separate stacks.
 
 ## The concept in one line
 
@@ -241,8 +241,9 @@ What landed:
 - **Watches (held):** parser scope-creep toward a CAS. The fence test is the
   mitigation, and mathjs is now imported behind exactly one `parse`-only wall.
 
-### M4 — Spatial verbs + selective manifest
-The workspace becomes genuinely spatial and large-notebook-ready.
+### M4 — Spatial verbs + selective manifest ✅ DONE (2026-07-23)
+The workspace becomes genuinely spatial and large-notebook-ready. Executed by
+subagents against `docs/m4-plan.md`, one stage per commit, each ending green.
 - Add `move`, `retire`, `replace` acts; fold into `layout` / `retired` projections.
 - **`edit-span`** (moved here from M3): edit a parsed expression's span tex →
   re-parse (via `@isomat/parse`) + dependents recompute + **id stable**. Same
@@ -251,6 +252,46 @@ The workspace becomes genuinely spatial and large-notebook-ready.
 - `scopedManifest(workspace, focus, byteBudget)`: bounded BFS over `CorrespondenceGraph.neighbors`/`reachable`, nearest-first fill.
 - **Exit:** a 30-object workspace yields a scoped manifest under budget containing the focus neighborhood and excluding far objects; `replace` is atomic (reject → intact); a 100-act log folds cheaply and stays deterministic across a checkpoint.
 - **Watches:** id stability under `replace`; compaction determinism. Both get direct tests.
+
+**M4 outcome — landed in four committed stages, all green (403 tests, typecheck
+8/8).** Plan at `docs/m4-plan.md`.
+- **M4a** (`7b7367a`) `move`/`retire` — pure-projection verbs; `retired: ReadonlySet<Id>`
+  now live on `Workspace` (the M1-deferred field). Absent-target move/retire is a
+  fold FAILURE (prior log intact).
+- **M4b** (`c744ce1`) `replace`/`edit-span` — **the id-stability-under-mutation core.**
+  A re-declaration can't append (core's id registry is single-assignment by design;
+  the scene is first-wins), so `foldLog` became **two-pass** (Option B, chosen with
+  the user): pass 1 resolves each introduced id to its FINAL definition (introduce
+  seeds; `replace` overwrites the js; `edit-span` re-parses+re-emits via an injected
+  `SpanResolver`); pass 2 mints each id ONCE with its final js, `replace`/`edit-span`
+  are no-ops. Id stays stable; dependents (all authored after) recompute against the
+  new definition. `commit`'s append-only contract + `identity`'s collision guard +
+  the first-wins scene are all untouched. DAG stays acyclic via dependency inversion
+  — `workspace` defines `ExprMeta`/`SpanResolver` as plain data; `@isomat/parse`
+  implements `resolveSpan` (new `editspan.ts`, a source-side `additiveTermSources`/
+  `toSource` twin of `toFragments`, no CAS). `edit-span` addresses top-level additive
+  terms in mathjs SOURCE (field `text`, not `tex`).
+- **M4c** (`6415a88`) `scopedManifest` — byte-budgeted nearest-first BFS over the
+  correspondence graph from a focus id; id-sorted within each layer (deterministic,
+  cassette-safe); shares one `objectLine` formatter with `sceneBrief`. Stays in
+  `brief.ts` (a copilot-path `manifest.ts` fails the fence).
+- **M4d** (`a2d0449`) checkpoint compaction — real `everyNActs(n, opts?)` trigger. A
+  folded `derive`/`plot` is a guest closure (unserializable), so the synthesized
+  `author` act reconstructs from each object's **source**, not its handle: it replays
+  the prefix's pass-2 execution (each introduce's FINAL resolved js via the reused
+  `resolveDefinitions`; set-inputs transcribed inline as `byId(id).setValueLive(v)`
+  in log order), so every id mints identically and exactly once. A bounded
+  `move`/`retire` tail restores the layout/retired projections an `author` act can't
+  carry. `fold(compacted) === fold(original)`.
+- **Deviations from the original spec (accepted):** (1) checkpoint bound is
+  `1+|layout|+|retired|+|suffix|` (still `O(live objects)`, independent of prefix
+  length), not a literal `1+|suffix|`; (2) a compacted object is frozen — a
+  post-checkpoint `replace`/`edit-span` on it needs `keepRecent` to hold it in the
+  live suffix; (3) `replace`/`edit-span` may only target an **introduced** id (not an
+  `author`-minted one), and its resolved source runs in the target's original
+  dependency scope. `edit-span` is NOT in `ExecutableAct` (it has no `.js`; it is
+  re-emitted through parse). Checkpoint trigger policy chosen: **N acts** (byte
+  budget can layer on later).
 
 ### M5 — Integrated co-edit workspace + probe toolset (Phase-1 goal)
 Everything converges; the spatial co-edit engine is real, headless, and tested.

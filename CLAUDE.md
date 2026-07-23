@@ -72,25 +72,38 @@ to reconsider, not to relax the fence.
 ## Status (2026-07-23)
 **M0** (substrate lift), **M1** (`workspace` fold), **Stabilize** (decouple from
 math-ai's lesson concepts), **M2** (copilot — **M2a** executor ↔ workspace seam +
-**M2b** the loop, classifier, `ModelClient` seam / `ScriptedClient` fake), and **M3**
+**M2b** the loop, classifier, `ModelClient` seam / `ScriptedClient` fake), **M3**
 (the `parse` front door — mathjs walled to `parse`-only, `introduceExpr` → sandbox
-fold, no-CAS fence) are all **DONE and committed**. Green: typecheck 8/8, **363
-tests**. Working tree clean. The one billed real-Claude session is deferred to M5
-(flagship cassette); everything so far runs free.
+fold, no-CAS fence), and **M4** (spatial verbs `move`/`retire`/`replace`/`edit-span`
++ real checkpoint compaction + `scopedManifest`) are all **DONE and committed**.
+Green: typecheck 8/8, **403 tests**. Working tree clean. The one billed real-Claude
+session is deferred to M5 (flagship cassette); everything so far runs free.
+
+**M4 shape to know:** `fold(log)` is now **two-pass** — a resolve pass collapses each
+introduced id to its FINAL definition (so `replace`/`edit-span` supersede in place,
+never a second mint against the single-assignment id registry), then the walk mints
+each id once. `replace`/`edit-span` target an **introduced** id only; `edit-span`
+edits top-level additive terms in mathjs SOURCE (field `text`) via an injected
+`SpanResolver` (`@isomat/parse`'s `resolveSpan`; `workspace` never imports `parse`).
+Checkpoint `everyNActs(n)` collapses a prefix into one synthesized `author` act by
+replaying each object's **source** (guest closures aren't serializable) + a bounded
+`move`/`retire` projection tail; `fold(compacted) === fold(original)`.
 
 ## The plan
-- `docs/roadmap.md` — the living plan. **Read it first.** Milestones M0/M1/Stabilize
-  are marked done; M2–M5 + Phase 2 (UI) are ahead.
+- `docs/roadmap.md` — the living plan. **Read it first.** M0/M1/Stabilize/M2/M3/M4
+  are marked done; M5 + Phase 2 (UI) are ahead.
+- `docs/m4-plan.md` — the executed file-level M4 plan (spatial verbs + manifest).
 - `docs/stabilize-plan.md` — the executed file-level Stabilize demolition plan.
 
-**NEXT: M4** — spatial verbs + selective manifest. Add `move`/`retire`/`replace`
-acts (fold into `layout`/`retired`), **`edit-span`** (moved from M3: edit a parsed
-span's tex → re-parse via `@isomat/parse` + dependents recompute + id stable — the
-same id-stability-under-mutation core as `replace`, solved together), real
-checkpoint-compaction trigger, and `scopedManifest(workspace, focus, byteBudget)`
-(bounded BFS over the correspondence graph — the `sceneBrief` in `copilot` is the
-unbounded precursor). Watches: id stability under `replace`/`edit-span`; compaction
-determinism. See roadmap M4. (M2's real-Claude cassette is deferred to M5.)
+**NEXT: M5** — integrated co-edit workspace + probe toolset (the Phase-1 goal).
+Grow the loop's tools (`plot`/`tabulate`/`numeric-equivalence`/`numeric-root`, each
+returning typed evidence, none certifying); the canonical *"is d/dx of this equal to
+that?"* → LLM derivative → numeric probe → **`sampled`** evidence path end-to-end;
+hammer the symmetric log (100+ interleaved acts from both authors through one
+foldable log). **Exit:** a headless integration test drives a full multi-object
+co-edit session (deterministic, no half-apply, `M.byId` robust) + the one billed
+`record`-style session captured as the flagship cassette (M2's deferred real-Claude
+session lands here). See roadmap M5. Ask before running the billed path.
 
 ## Locked decisions
 - **No CAS.** The LLM reasons (fallibly); the engine makes math manipulable/visible/
