@@ -68,7 +68,7 @@ story), and `run.sh`'s dead `dev`/`build`/`verify`/`record`/`gate`/etc. commands
 (they reference `@isomat/web`/`@isomat/planner`, which don't exist). Delete/prune
 when `workspace` lands.
 
-### M1 — Workspace log & fold (3 verbs)
+### M1 — Workspace log & fold (3 verbs) ✅ DONE (2026-07-23)
 `packages/workspace`. The pivot, minimally.
 - `WorkspaceAct` union with `by: Author` + `turn`; implement **only** `author`, `introduce`, `set-input`.
 - `fold(log): Workspace` → `{ objects, layout, graph, claims, retired }`.
@@ -76,6 +76,34 @@ when `workspace` lands.
 - `coalesce` for drags; `isolate()` for author scoping. **Stable-id policy decided now:** introduced objects get explicit session-counter ids, not positional ones.
 - Checkpoint-compaction *interface* + no-op stub (real trigger lands M4).
 - **Exit:** fold a hand-built log (author creates a param+plot object; set-input drags it) → correct `Workspace`; a throwing author act leaves the prior log intact; re-fold yields identical ids (the cassette property).
+
+**M1 outcome — landed, all green, `conversation.ts` generalized cleanly.**
+`packages/workspace` = `act.ts` (the 3-verb union, every act `by`-tagged),
+`fold.ts` (hook-driven `foldLog`, generalizes `replayLog`), `commit.ts` (the
+one-transaction rule, generalizes `commitEntry`), `session.ts` (`SessionIds`
+stable-id allocator, `<base>@<n>`), `checkpoint.ts` (interface + no-op stub),
+`node.ts` (QuickJS-backed `fold`/`tryFold`). **17 new tests, full suite green:
+`typecheck` clean across 6 packages, 534 tests pass** (~2s). `examples/` corpus +
+its smoke test deleted (sole reader confirmed). The M1 `Workspace` is the minimal
+`{ objects, layout, graph }` — `claims`/`retired` **deferred to M4** (no M1 verb
+fills them; a permanently-empty field would be speculative ontology).
+
+Findings carried forward:
+- **Substrate seam (the one place `conversation.ts` didn't cover):** guest source
+  couldn't mint an explicit *engine* id through `M`. Fixed additively — `opts.id`
+  threaded through `M.parameter`/`M.derived` → `createParameter`/`derivedNumber` →
+  `world.handle(kind, id)`. Backward-compatible (all lifted tests green). **Open
+  question for M2/M3:** should stable-id minting be *first-class* in the authoring
+  vocabulary rather than an optional opt on two constructors? M3's `introduce`
+  (LaTeX→object) and M4's `replace` both lean on this seam.
+- **VM lifetime:** a folded `Workspace` keeps its QuickJS VM alive (a derived's
+  `.value` re-invokes a bridge-retained guest closure), so `fold()` must not
+  dispose it. M4 checkpoint-compaction needs a disposal/lifetime story so old VMs
+  don't accumulate across a long session.
+- **Empty correspondence graph:** simple hand-authored programs record no edges
+  (`M.parameter`/`M.derived` don't emit them; edges come from `defineOp`/authored
+  `link`). M4's `scopedManifest` BFS needs the copilot (M2) to author programs
+  that actually record edges — watch when the loop starts writing fragments.
 
 ### M2 — 4c loop, live and headless
 `packages/copilot`. Light up what math-ai built but never wired.

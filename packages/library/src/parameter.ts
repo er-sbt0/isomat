@@ -12,7 +12,7 @@
  * renormalize-row.
  */
 
-import type { World } from '@isomat/core';
+import type { Id, World } from '@isomat/core';
 import type { VarySettable } from '@isomat/lesson';
 
 export interface Parameter extends VarySettable {
@@ -42,9 +42,15 @@ export function createParameter(
   name: string,
   value: number,
   range: readonly [number, number],
+  id?: Id,
 ): Parameter {
   const slot = world.slot(clamp(value, range));
-  const base = world.handle('parameter');
+  // An explicit handle id is the workspace stable-id seam (roadmap M1): an
+  // `introduce`/author act that mints its object with `{ id }` keeps that id
+  // under re-fold and under an earlier act being inserted, so `M.byId`
+  // references survive a later `replace`. Omit it and the id stays positional
+  // (`parameter#n`), which is correct for generated intermediates.
+  const base = world.handle('parameter', id);
   return Object.freeze({
     id: base.id,
     kind: 'parameter' as const,

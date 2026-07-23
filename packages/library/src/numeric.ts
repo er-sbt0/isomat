@@ -14,7 +14,7 @@
  * typed against `LabeledNumber` rather than `LiveValue<number>`.
  */
 
-import type { World } from '@isomat/core';
+import type { Id, World } from '@isomat/core';
 import type { NumericHandle } from '@isomat/lesson';
 import { isLive, live, constLive } from './live.js';
 
@@ -23,9 +23,15 @@ export interface LabeledNumber extends NumericHandle {
   readonly label?: string;
 }
 
-/** A live reactive scalar: `.value` re-reads a derived that tracks its inputs. */
-export function derivedNumber(world: World, fn: () => number, label?: string): LabeledNumber {
-  return live<number>(world, fn, { label, kind: 'scalar' }) as LabeledNumber;
+/** A live reactive scalar: `.value` re-reads a derived that tracks its inputs.
+ *  `id` stamps an explicit stable handle id (the workspace stable-id seam). */
+export function derivedNumber(
+  world: World,
+  fn: () => number,
+  label?: string,
+  id?: Id,
+): LabeledNumber {
+  return live<number>(world, fn, { label, kind: 'scalar', ...(id ? { id } : {}) }) as LabeledNumber;
 }
 
 /** A constant scalar handle (a literal matrix entry, a fixed width). */

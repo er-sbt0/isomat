@@ -21,7 +21,7 @@
  * shapes the plane geometry actually uses; pass one when T is structural.
  */
 
-import type { Derived, World } from '@isomat/core';
+import type { Derived, Id, World } from '@isomat/core';
 import type { Live } from '@isomat/lesson';
 
 export type { Live };
@@ -46,13 +46,20 @@ export interface LiveOpts<T> {
   readonly kind?: string;
   /** Short-circuit for structural T — see the note above. */
   readonly equals?: (a: T, b: T) => boolean;
+  /**
+   * An explicit, stable handle id (the workspace stable-id seam, roadmap M1).
+   * Omit for a positional `<kind>#<n>` id — the right choice for a generated
+   * intermediate. Supply one when an `introduce`/author act mints an object it
+   * wants `M.byId`-referenceable across a later `replace`.
+   */
+  readonly id?: Id;
 }
 
 /** A live value computed from other reactive cells; `fn` is tracked on read. */
 export function live<T>(world: World, fn: () => T, opts?: LiveOpts<T>): LiveValue<T> {
   const d = world.derived(fn, opts?.equals ? { equals: opts.equals } : undefined);
   const kind = opts?.kind ?? 'live';
-  const base = world.handle(kind);
+  const base = world.handle(kind, opts?.id);
   return Object.freeze({
     id: base.id,
     kind,

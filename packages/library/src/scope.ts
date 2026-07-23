@@ -57,13 +57,19 @@ export interface MLib extends AutomataLib {
   range(n: number): readonly number[];
   /** Re-exported for symmetry with `M.words` — the reactive source type. */
   collection<T>(initial?: readonly T[]): Collection<T>;
-  /** Δ3 — a reactive, draggable scalar with a range (see parameter.ts). */
-  parameter(name: string, value: number, opts: { range: readonly [number, number] }): Parameter;
+  /** Δ3 — a reactive, draggable scalar with a range (see parameter.ts).
+   *  `opts.id` stamps an explicit stable handle id — the workspace stable-id
+   *  seam (roadmap M1); omit it for a positional `parameter#n` id. */
+  parameter(
+    name: string,
+    value: number,
+    opts: { range: readonly [number, number]; id?: string },
+  ): Parameter;
   /** A live scalar computed from other reactive cells. `fn` is re-run on read
    *  and tracks whatever it touches, so a dragged Parameter updates it — the
    *  same mechanism behind `LinAlg.determinant` and `Calc` numerics. Reach for
    *  this instead of hand-building an object with a `value` getter. */
-  derived(fn: () => number, label?: string): LabeledNumber;
+  derived(fn: () => number, label?: string, opts?: { id?: string }): LabeledNumber;
   /** A live proposition — two quantities and an asserted relation, or a
    *  predicate closure. Its `status` re-derives like any other reactive value,
    *  so `View.claim` shows the student whether their drag broke it. See
@@ -141,9 +147,13 @@ export function createProgramScope(world: World, stage: Stage): ProgramScope {
     range: (n: number): readonly number[] =>
       Object.freeze(Array.from({ length: Math.max(0, Math.floor(n)) }, (_, i) => i)),
     collection: <T>(initial: readonly T[] = []): Collection<T> => world.collection(initial),
-    parameter: (name: string, value: number, opts: { range: readonly [number, number] }): Parameter =>
-      createParameter(world, name, value, opts.range),
-    derived: (fn: () => number, label?: string): LabeledNumber => derivedNumber(world, fn, label),
+    parameter: (
+      name: string,
+      value: number,
+      opts: { range: readonly [number, number]; id?: string },
+    ): Parameter => createParameter(world, name, value, opts.range, opts.id),
+    derived: (fn: () => number, label?: string, opts?: { id?: string }): LabeledNumber =>
+      derivedNumber(world, fn, label, opts?.id),
     claim: (opts: ClaimOpts): Claim => createClaim(world, opts),
     byId: <T = Handle>(id: string): T => {
       // Built per call, not cached: a fragment may reference an object an
