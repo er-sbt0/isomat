@@ -4,7 +4,7 @@
  * `fold.ts` is pure and hook-driven; this file is the half that backs those
  * hooks with a real QuickJS world, exactly as `conversation.sandbox.test.ts`
  * and `tools.sandbox.test.ts` wire one. Kept separate (a `./node` subpath, like
- * `@isomat/host/node`) so the pure fold logic never drags the Node wasm loader
+ * `@isomat/sandbox/node`) so the pure fold logic never drags the Node wasm loader
  * into a browser bundle.
  *
  * `state = fold(log)`: every `fold` call boots a BRAND-NEW world + scope + VM
@@ -15,10 +15,10 @@
 
 import { createWorld } from '@isomat/core';
 import type { CorrespondenceGraph, Handle, Id } from '@isomat/core';
-import { createStage, sceneIndex } from '@isomat/render';
-import { createNativeScope } from '@isomat/library';
-import { QuickJSHost, isolate } from '@isomat/host';
-import { newNodeContext } from '@isomat/host/node';
+import { createStage, sceneIndex } from '@isomat/objects';
+import { createNativeScope } from '@isomat/objects';
+import { QuickJSHost, isolate } from '@isomat/sandbox';
+import { newNodeContext } from '@isomat/sandbox/node';
 import type { ExecutableAct, WorkspaceLog } from './act.js';
 import { foldLog } from './fold.js';
 import type { FoldHooks, FoldOutcome } from './fold.js';

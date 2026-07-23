@@ -1,25 +1,29 @@
 /**
- * import-boundary.test.ts — the Stabilize fence.
+ * import-boundary.test.ts — the Stabilize fence (final S4 form).
  *
  * This is the regression guard that keeps the win the Stabilize milestone buys:
  * the main-path packages (the substrate the product actually ships) must not
- * couple back to the demoted playback machinery or the discipline libraries.
+ * couple back to the quarantined playback machinery or the shed discipline
+ * libraries.
  *
- * It is written in its final intended SHAPE but scoped to what is already true
- * today, so it PASSES now and tightens as later stages land. Two invariants:
+ * The main path is `core → substrate → { sandbox, objects } → workspace`. The
+ * quarantine is `@isomat/cell` (the timeline player, the lesson authoring verbs
+ * and morph, the prose manifest, the playback-only views). Invariants:
  *
- *   1. No `workspace` source file imports the lesson / timeline / player modules
- *      (the playback vocabulary being quarantined). `workspace` is the top of
- *      the main path; if it stays clean, a fold can never re-couple to the
- *      demoted timeline (risk 8) or the lesson verbs.
+ *   1. No main-path source file imports `@isomat/cell`. `cell/` is off the DAG;
+ *      a fold, a native object, or the sandbox must never reach into it.
  *
- *   2. No `core`- or `sandbox`-path (`host`) source file imports a discipline
- *      library (automata / graph / probability / calculus / linalg / field /
- *      structure). This is the "host stands on core alone" invariant from §3;
- *      it is true today and must stay true.
+ *   2. No main-path source (other than `core`, which owns `timeline.ts` and
+ *      consumes it internally) imports a playback module — `timeline`, `player`,
+ *      `lesson`, `morph`, `manifest`, `segments`, `animate`, `supersede`,
+ *      `pacing`, `events`. This keeps `core/timeline.ts` unreachable from the
+ *      workspace-facing path (§8 risk 8): a future `fold` feature cannot quietly
+ *      re-couple to the demoted timeline.
  *
- * Later stages EXTEND this (add `objects`/`sandbox` after the renames, forbid
- * main-path → `cell/` imports); they do not rewrite it.
+ *   3. No source ANYWHERE — not even the quarantine — imports a shed discipline
+ *      (automata / graph / probability / calculus / linalg / field / structure /
+ *      interaction). There is nothing left to import; a re-introduction fails
+ *      here rather than quietly re-growing the deleted surface.
  */
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -43,11 +47,29 @@ const DISCIPLINES = [
   'interaction',
 ];
 
-/** Every package's `src` tree — the whole main path plus the quarantine. */
-const PACKAGES = ['core', 'lesson', 'render', 'library', 'host', 'workspace', 'substrate'];
+/** The quarantine package — off the main-path DAG. */
+const QUARANTINE = ['cell'];
 
-/** Playback modules the main path must never reach for. */
-const PLAYBACK = ['lesson', 'timeline', 'player'];
+/** Playback module basenames the workspace-facing path must never reach for. */
+const PLAYBACK = [
+  'timeline',
+  'player',
+  'lesson',
+  'morph',
+  'manifest',
+  'segments',
+  'animate',
+  'supersede',
+  'pacing',
+  'events',
+];
+
+/** The whole package set — the main path plus the quarantine. */
+const ALL_PACKAGES = ['core', 'substrate', 'sandbox', 'objects', 'workspace', 'cell'];
+/** The main path: everything the product ships. `cell` is NOT here. */
+const MAIN_PATH = ['core', 'substrate', 'sandbox', 'objects', 'workspace'];
+/** The workspace-facing path: the main path minus `core` (which owns timeline). */
+const WORKSPACE_FACING = ['substrate', 'sandbox', 'objects', 'workspace'];
 
 function sourceFiles(pkgSrc: string): string[] {
   const out: string[] = [];
@@ -100,24 +122,18 @@ function offences(pkgRelDir: string, forbidden: readonly string[]): string[] {
 }
 
 describe('import boundary — the Stabilize fence', () => {
-  it('workspace source imports no lesson / timeline / player module', () => {
-    expect(offences('packages/workspace/src', PLAYBACK)).toEqual([]);
+  it('no main-path source imports the @isomat/cell quarantine', () => {
+    const all = MAIN_PATH.flatMap((pkg) => offences(`packages/${pkg}/src`, QUARANTINE));
+    expect(all).toEqual([]);
   });
 
-  it('core source imports no discipline library', () => {
-    expect(offences('packages/core/src', DISCIPLINES)).toEqual([]);
+  it('no workspace-facing source imports a playback module (core/timeline.ts stays unreachable — §8 risk 8)', () => {
+    const all = WORKSPACE_FACING.flatMap((pkg) => offences(`packages/${pkg}/src`, PLAYBACK));
+    expect(all).toEqual([]);
   });
 
-  it('host (sandbox) source imports no discipline library', () => {
-    expect(offences('packages/host/src', DISCIPLINES)).toEqual([]);
-  });
-
-  // S3 extension: the disciplines were SHED (§1, §2.3). No source anywhere — not
-  // even the quarantine — imports one, because there is nothing left to import.
-  // This is the fence that keeps the shed shed: a future re-introduction fails
-  // here rather than quietly re-growing the deleted surface.
   it('NO package source imports any shed discipline (automata / graph / probability / calculus / linalg / field / structure / interaction)', () => {
-    const all = PACKAGES.flatMap((pkg) => offences(`packages/${pkg}/src`, DISCIPLINES));
+    const all = ALL_PACKAGES.flatMap((pkg) => offences(`packages/${pkg}/src`, DISCIPLINES));
     expect(all).toEqual([]);
   });
 });

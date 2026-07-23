@@ -15,9 +15,8 @@
   },
   "dependencies": {
     "@isomat/core": "workspace:*",
-    "@isomat/host": "workspace:*",
-    "@isomat/library": "workspace:*",
-    "@isomat/render": "workspace:*"
+    "@isomat/objects": "workspace:*",
+    "@isomat/sandbox": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

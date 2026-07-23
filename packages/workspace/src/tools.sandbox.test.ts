@@ -2,7 +2,7 @@
  * tools.sandbox.test.ts — the whole instrument, played against real guest code.
  *
  * PARKED at the workspace level (Stabilize §3.2/§3.3), with `tools.test.ts`:
- * `tools.ts` is core-only and stays in `@isomat/host`, but these tests couple to
+ * `tools.ts` is core-only and stays in `@isomat/sandbox`, but these tests couple to
  * `render`/`library`, so they run here until M2 lifts them into the copilot seam.
  *
  * S3 re-authored the guest program from the discipline/lesson vocabulary the shed
@@ -16,10 +16,10 @@
 
 import { describe, expect, it } from 'vitest';
 import { createWorld } from '@isomat/core';
-import { createStage, sceneIndex } from '@isomat/render';
-import { createNativeScope } from '@isomat/library';
-import { QuickJSHost } from '@isomat/host';
-import { newNodeContext } from '@isomat/host/node';
+import { createStage, sceneIndex } from '@isomat/objects';
+import { createNativeScope } from '@isomat/objects';
+import { QuickJSHost } from '@isomat/sandbox';
+import { newNodeContext } from '@isomat/sandbox/node';
 import {
   replayLog,
   isolate,
@@ -31,8 +31,8 @@ import {
   inspect,
   setInput,
   whyChanged,
-} from '@isomat/host';
-import type { ConversationLog, Settable, CompileFragment, FoldScene, SceneMap } from '@isomat/host';
+} from '@isomat/sandbox';
+import type { ConversationLog, Settable, CompileFragment, FoldScene, SceneMap } from '@isomat/sandbox';
 
 /** Turn 1: a parameter, a derived, a claim over it, and a fn to sample. */
 const PROGRAM = [

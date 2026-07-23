@@ -21,9 +21,9 @@
 
 import { describe, expect, it } from 'vitest';
 import { createWorld } from '@isomat/core';
-import { createStage, sceneIndex } from '@isomat/render';
-import { createNativeScope } from '@isomat/library';
-import type { ClaimEvidence } from '@isomat/library';
+import { createStage, sceneIndex } from '@isomat/objects';
+import { createNativeScope } from '@isomat/objects';
+import type { ClaimEvidence } from '@isomat/objects';
 
 function setup() {
   const world = createWorld();

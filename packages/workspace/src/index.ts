@@ -4,7 +4,7 @@
  * The redesign's pivot: `fold(log)` stops producing a played timeline and
  * starts producing a *positioned set of live math objects* — a `Workspace` —
  * that a user and an LLM co-edit through an authorship-tagged act log. This is
- * the generalization of `@isomat/host`'s `conversation.ts` (3 entry kinds,
+ * the generalization of `@isomat/sandbox`'s `conversation.ts` (3 entry kinds,
  * timeline replay) into an N-verb, two-author log whose fold is a projection.
  *
  * M1 implements exactly three verbs — `author`, `introduce`, `set-input` — and

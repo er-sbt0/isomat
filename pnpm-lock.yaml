@@ -18,6 +18,28 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)
 
+  packages/cell:
+    dependencies:
+      '@isomat/core':
+        specifier: workspace:*
+        version: link:../core
+      '@isomat/objects':
+        specifier: workspace:*
+        version: link:../objects
+      '@isomat/substrate':
+        specifier: workspace:*
+        version: link:../substrate
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
   packages/core:
     devDependencies:
       '@types/node':
@@ -30,7 +52,35 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)
 
-  packages/host:
+  packages/objects:
+    dependencies:
+      '@isomat/core':
+        specifier: workspace:*
+        version: link:../core
+      '@isomat/substrate':
+        specifier: workspace:*
+        version: link:../substrate
+      katex:
+        specifier: ^0.16.47
+        version: 0.16.47
+    devDependencies:
+      '@types/katex':
+        specifier: ^0.16.7
+        version: 0.16.8
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      esbuild:
+        specifier: ^0.21.5
+        version: 0.21.5
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
+  packages/sandbox:
     dependencies:
       '@isomat/core':
         specifier: workspace:*
@@ -45,84 +95,6 @@ importers:
         specifier: ^0.32.0
         version: 0.32.0
     devDependencies:
-      '@types/node':
-        specifier: ^22.10.2
-        version: 22.20.1
-      esbuild:
-        specifier: ^0.21.5
-        version: 0.21.5
-      typescript:
-        specifier: ^5.6.3
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(@types/node@22.20.1)
-
-  packages/lesson:
-    dependencies:
-      '@isomat/core':
-        specifier: workspace:*
-        version: link:../core
-      '@isomat/substrate':
-        specifier: workspace:*
-        version: link:../substrate
-    devDependencies:
-      '@types/node':
-        specifier: ^22.10.2
-        version: 22.20.1
-      typescript:
-        specifier: ^5.6.3
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(@types/node@22.20.1)
-
-  packages/library:
-    dependencies:
-      '@isomat/core':
-        specifier: workspace:*
-        version: link:../core
-      '@isomat/lesson':
-        specifier: workspace:*
-        version: link:../lesson
-      '@isomat/render':
-        specifier: workspace:*
-        version: link:../render
-      '@isomat/substrate':
-        specifier: workspace:*
-        version: link:../substrate
-    devDependencies:
-      '@types/node':
-        specifier: ^22.10.2
-        version: 22.20.1
-      esbuild:
-        specifier: ^0.21.5
-        version: 0.21.5
-      typescript:
-        specifier: ^5.6.3
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(@types/node@22.20.1)
-
-  packages/render:
-    dependencies:
-      '@isomat/core':
-        specifier: workspace:*
-        version: link:../core
-      '@isomat/lesson':
-        specifier: workspace:*
-        version: link:../lesson
-      '@isomat/substrate':
-        specifier: workspace:*
-        version: link:../substrate
-      katex:
-        specifier: ^0.16.47
-        version: 0.16.47
-    devDependencies:
-      '@types/katex':
-        specifier: ^0.16.7
-        version: 0.16.8
       '@types/node':
         specifier: ^22.10.2
         version: 22.20.1
@@ -157,15 +129,12 @@ importers:
       '@isomat/core':
         specifier: workspace:*
         version: link:../core
-      '@isomat/host':
+      '@isomat/objects':
         specifier: workspace:*
-        version: link:../host
-      '@isomat/library':
+        version: link:../objects
+      '@isomat/sandbox':
         specifier: workspace:*
-        version: link:../library
-      '@isomat/render':
-        specifier: workspace:*
-        version: link:../render
+        version: link:../sandbox
     devDependencies:
       '@types/node':
         specifier: ^22.10.2

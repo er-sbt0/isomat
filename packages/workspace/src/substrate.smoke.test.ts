@@ -16,10 +16,10 @@
  */
 import { describe, expect, it } from 'vitest';
 import { createWorld } from '@isomat/core';
-import { createStage } from '@isomat/render';
-import { createNativeScope } from '@isomat/library';
-import { QuickJSHost } from '@isomat/host';
-import { newNodeContext } from '@isomat/host/node';
+import { createStage } from '@isomat/objects';
+import { createNativeScope } from '@isomat/objects';
+import { QuickJSHost } from '@isomat/sandbox';
+import { newNodeContext } from '@isomat/sandbox/node';
 
 async function bootHost() {
   const world = createWorld();

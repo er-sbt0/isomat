@@ -3,7 +3,7 @@
  *
  * PARKED at the workspace level (Stabilize §3.2/§3.3): `tools.ts` is the 4c tool
  * executor destined for a future `copilot` package (roadmap M2). It stays
- * core-only in `@isomat/host`, but its tests couple to `render`/`library`, so
+ * core-only in `@isomat/sandbox`, but its tests couple to `render`/`library`, so
  * they live here — the package that already owns those deps — rather than
  * forcing them back into a host that now stands on `core` alone. M2 lifts both
  * `tools.ts` and these tests into the copilot seam. S3 re-authored the scene
@@ -21,13 +21,13 @@
 
 import { describe, expect, it } from 'vitest';
 import { createWorld } from '@isomat/core';
-import { createStage, sceneIndex } from '@isomat/render';
-import { createNativeScope } from '@isomat/library';
-import type { NativeScope } from '@isomat/library';
-import { appendFragment, bisectFlip, counterfactual, evalAt, inspect, runTool, setInput, whyChanged } from '@isomat/host';
-import type { CompileFragment, FoldScene } from '@isomat/host';
-import { replayLog } from '@isomat/host';
-import type { ConversationLog, Settable } from '@isomat/host';
+import { createStage, sceneIndex } from '@isomat/objects';
+import { createNativeScope } from '@isomat/objects';
+import type { NativeScope } from '@isomat/objects';
+import { appendFragment, bisectFlip, counterfactual, evalAt, inspect, runTool, setInput, whyChanged } from '@isomat/sandbox';
+import type { CompileFragment, FoldScene } from '@isomat/sandbox';
+import { replayLog } from '@isomat/sandbox';
+import type { ConversationLog, Settable } from '@isomat/sandbox';
 
 /**
  * One scene with something for every dispatch arm: a draggable parameter, a
