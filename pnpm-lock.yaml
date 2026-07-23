@@ -185,6 +185,9 @@ importers:
       '@isomat/objects':
         specifier: workspace:*
         version: link:../objects
+      '@isomat/parse':
+        specifier: workspace:*
+        version: link:../parse
       '@isomat/sandbox':
         specifier: workspace:*
         version: link:../sandbox

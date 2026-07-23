@@ -130,6 +130,62 @@ code {
   color: var(--dim);
 }
 
+/* ── expression entry ── */
+
+.expr {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.expr input[type="text"] {
+  flex: 1;
+  min-width: 12rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--fg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.95rem;
+}
+
+button {
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.undo {
+  margin-left: 0.6rem;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.inline {
+  flex-basis: 100%;
+  margin: 0.3rem 0 0;
+  font-size: 0.85rem;
+}
+
 /* ── the canvas ── */
 
 .canvas {
@@ -137,6 +193,35 @@ code {
   grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
   gap: 0.9rem;
   align-items: start;
+}
+
+.cell {
+  position: relative;
+}
+
+.cell .retire {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  z-index: 1;
+  padding: 0 0.35rem;
+  line-height: 1.3;
+  font-size: 0.9rem;
+  border-color: transparent;
+  background: transparent;
+  color: var(--dim);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.cell:hover .retire,
+.cell .retire:focus-visible {
+  opacity: 1;
+}
+
+.cell .retire:hover:not(:disabled) {
+  color: var(--reject);
+  border-color: var(--reject);
 }
 
 .obj {
@@ -288,6 +373,60 @@ code {
 
 .formula code {
   font-size: 0.95rem;
+}
+
+/* ── the log ── */
+
+ol.log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--panel);
+}
+
+ol.log li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.45rem 0.8rem;
+  border-bottom: 1px solid var(--line);
+}
+
+ol.log li:last-child {
+  border-bottom: none;
+}
+
+.by {
+  flex: none;
+  width: 4.4rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.by-user {
+  color: var(--user);
+}
+
+.by-copilot {
+  color: var(--copilot);
+}
+
+.kind {
+  flex: none;
+  width: 5.5rem;
+  color: var(--dim);
+  font-size: 0.8rem;
+}
+
+ol.log code {
+  color: var(--fg);
+  opacity: 0.85;
+  overflow-wrap: anywhere;
 }
 
 /* ── footer ── */
