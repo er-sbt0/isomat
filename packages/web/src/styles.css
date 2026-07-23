@@ -375,6 +375,47 @@ button:disabled {
   font-size: 0.95rem;
 }
 
+/* ── the copilot turn ── */
+
+.turn {
+  margin-top: 0.8rem;
+  padding: 0.8rem 0.95rem;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--copilot);
+  border-radius: 0 8px 8px 0;
+  background: var(--panel);
+}
+
+.turnhead {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.8rem;
+  margin-bottom: 0.5rem;
+}
+
+.answer {
+  margin: 0;
+}
+
+.turn .evidence {
+  margin: 0.6rem 0 0;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--line);
+  font-size: 0.82rem;
+  color: var(--dim);
+}
+
+.ev-ungrounded code {
+  color: var(--reject);
+  font-weight: 700;
+}
+
+.ev-ok code {
+  color: var(--accent);
+  font-weight: 700;
+}
+
 /* ── the log ── */
 
 ol.log {

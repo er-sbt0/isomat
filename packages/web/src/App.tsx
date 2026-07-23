@@ -23,7 +23,10 @@ import type { Handle, Id } from '@isomat/core';
 import type { Workspace, WorkspaceAct } from '@isomat/workspace';
 import { SessionIds } from '@isomat/workspace';
 import { introduceExpr, parseExpr } from '@isomat/parse';
+import { runTurn } from '@isomat/copilot';
+import type { TurnOutcome } from '@isomat/copilot';
 import { DEMO_LOG } from './demo-log.js';
+import { NoModelClient, turnDeps } from './copilot.js';
 import { bumpLive, useLive } from './live.js';
 import { useSession } from './session.js';
 import type { Session } from './session.js';
@@ -188,11 +191,95 @@ function ExprEntry({ session, workspace, ids }: { session: Session; workspace: W
   );
 }
 
+// ─────────────────────────────── ask the copilot ───────────────────────────────
+
+const CLIENT = new NoModelClient();
+
+function AskCopilot({ session, onOutcome }: { session: Session; onOutcome: (o: TurnOutcome) => void }) {
+  const [question, setQuestion] = useState('set a to 5');
+  const [thinking, setThinking] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  const ask = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      const q = question.trim();
+      if (!q || !session.state) return;
+      setThinking(true);
+      setFailure(null);
+      try {
+        // runTurn commits the copilot's acts through the SAME transaction rule
+        // the user's edits use, and hands back the advanced log.
+        const outcome = await runTurn(session.state.log, q, CLIENT, turnDeps);
+        onOutcome(outcome);
+        if (outcome.log !== session.state.log) await session.adopt(outcome.log);
+      } catch (err) {
+        setFailure(err instanceof Error ? err.message : String(err));
+      } finally {
+        setThinking(false);
+      }
+    },
+    [question, session, onOutcome],
+  );
+
+  return (
+    <form className="expr" onSubmit={ask}>
+      <input
+        type="text"
+        value={question}
+        onChange={(e) => setQuestion(e.target.value)}
+        placeholder='e.g. "set a to 5"'
+        aria-label="question"
+        disabled={thinking || session.busy}
+      />
+      <button type="submit" disabled={thinking || session.busy || !question.trim()}>
+        {thinking ? 'thinking…' : 'ask'}
+      </button>
+      {failure && <p className="failed inline">{failure}</p>}
+    </form>
+  );
+}
+
+/**
+ * The turn's result, reported as what it actually is.
+ *
+ * `modelCalls: 0` is shown prominently because it is the interesting claim: the
+ * classifier resolved a manipulation deterministically and spent nothing. And an
+ * answer's evidence is shown WITH whether the loop could ground it in probes that
+ * really ran — an ungrounded declaration is the exact failure evidence-typing
+ * exists to catch, so it must not render as a quiet success.
+ */
+function TurnResult({ outcome }: { outcome: TurnOutcome }) {
+  const agentic = outcome.kind === 'agentic' ? outcome : null;
+  return (
+    <div className="turn">
+      <div className="turnhead">
+        <span className={`badge badge-${outcome.kind === 'manipulated' ? 'accept' : 'neutral'}`}>
+          {outcome.kind}
+        </span>
+        <span className="dim">
+          {outcome.modelCalls} model call{outcome.modelCalls === 1 ? '' : 's'} · {outcome.steps.length} tool
+          step{outcome.steps.length === 1 ? '' : 's'}
+        </span>
+      </div>
+      <p className="answer">{outcome.answer}</p>
+      {agentic?.evidence && (
+        <p className={`evidence ${agentic.evidenceGrounded ? 'ev-ok' : 'ev-ungrounded'}`}>
+          <code>{String(agentic.evidence)}</code>
+          {agentic.evidenceGrounded ? ' — backed by probes that ran' : ' — NOT grounded in any probe that ran'}
+        </p>
+      )}
+      {agentic?.truncated && <p className="failed">the loop hit its step budget without answering</p>}
+    </div>
+  );
+}
+
 // ──────────────────────────────── the app ────────────────────────────────
 
 export function App() {
   const session = useSession(DEMO_LOG);
   const { state } = session;
+  const [turn, setTurn] = useState<TurnOutcome | null>(null);
 
   // One allocator per mounted session, so ids stay legible and unique.
   const ids = useMemo(() => new SessionIds('e'), []);
@@ -239,6 +326,12 @@ export function App() {
       <section>
         <h2>Introduce an expression</h2>
         <ExprEntry session={session} workspace={workspace} ids={ids} />
+      </section>
+
+      <section>
+        <h2>Ask the copilot</h2>
+        <AskCopilot session={session} onOutcome={setTurn} />
+        {turn && <TurnResult outcome={turn} />}
       </section>
 
       <section>
@@ -307,7 +400,8 @@ function Header() {
     <header>
       <h1>isomat</h1>
       <p className="sub">
-        W2 — every change is an act; the workspace is <code>fold(log)</code>, and undo is truncation.
+        W3 — both authors edit one log. The copilot&rsquo;s classifier resolves manipulations with
+        zero model calls; the agentic path needs a model this repo does not have.
       </p>
     </header>
   );

@@ -179,6 +179,9 @@ importers:
 
   packages/web:
     dependencies:
+      '@isomat/copilot':
+        specifier: workspace:*
+        version: link:../copilot
       '@isomat/core':
         specifier: workspace:*
         version: link:../core

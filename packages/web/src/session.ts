@@ -31,10 +31,40 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { coalesce, commit, foldLog } from '@isomat/workspace';
+import { commit, foldLog } from '@isomat/workspace';
 import type { FoldOutcome, Workspace, WorkspaceAct, WorkspaceLog } from '@isomat/workspace';
 import { createFoldEnv } from '@isomat/workspace/browser';
 import type { FoldEnv } from '@isomat/workspace/browser';
+
+/**
+ * Collapse the last two acts if — and only if — they are the same author's
+ * consecutive `set-input`s on the same target.
+ *
+ * The engine's `coalesce` is deliberately author-blind: its job is a drag sweep,
+ * and in M1 "both authors fold identically". That is fine for folding and wrong
+ * for a two-author LOG. Running it here merged the user's `a = 3` into the
+ * copilot's `a = 5` and the user's act simply vanished — in a workspace whose
+ * entire premise is an authorship-tagged co-edit log, that silently rewrites who
+ * did what, and undo then steps over someone else's edit.
+ *
+ * So the app collapses only within one author's own sweep. Same-target sets by
+ * DIFFERENT authors both survive as distinct acts, because they are distinct
+ * edits by distinct people.
+ *
+ * (Worth fixing upstream too — but `coalesce`'s contract is the engine's, and a
+ * UI should not quietly redefine it.)
+ */
+function coalesceOwnSweep(log: WorkspaceLog): WorkspaceLog {
+  if (log.length < 2) return log;
+  const last = log[log.length - 1]!;
+  const prev = log[log.length - 2]!;
+  const mergeable =
+    last.kind === 'set-input' &&
+    prev.kind === 'set-input' &&
+    last.target === prev.target &&
+    last.by === prev.by;
+  return mergeable ? [...log.slice(0, -2), last] : log;
+}
 
 export interface SessionState {
   readonly log: WorkspaceLog;
@@ -50,6 +80,13 @@ export interface Session {
   readonly busy: boolean;
   /** Append an act under the one-transaction rule. Resolves true if it stood. */
   apply(act: WorkspaceAct): Promise<boolean>;
+  /**
+   * Adopt a log produced elsewhere — specifically `runTurn`'s, which has already
+   * committed the copilot's acts through the same transaction rule and hands
+   * back the advanced log. Re-folds to display it; rejects nothing, because a
+   * log `runTurn` returns has folded already.
+   */
+  adopt(log: WorkspaceLog): Promise<boolean>;
   /** Drop the last act and re-fold. Undo is log truncation — free, given `fold`. */
   undo(): Promise<void>;
   /** The next conversational turn number for a new act. */
@@ -123,8 +160,9 @@ export function useSession(initialLog: WorkspaceLog): Session {
           return false;
         }
         setError(null);
-        // Safe after the fact — see the coalesce note in the header.
-        const collapsed = coalesce(result.log);
+        // Safe after the fact: merging two consecutive same-target sets cannot
+        // change the folded state, since the later one already won.
+        const collapsed = coalesceOwnSweep(result.log);
         setState((s) => (s ? { ...s, log: collapsed } : s));
         return true;
       } finally {
@@ -132,6 +170,26 @@ export function useSession(initialLog: WorkspaceLog): Session {
       }
     },
     [state, foldAndAdopt],
+  );
+
+  const adopt = useCallback(
+    async (log: WorkspaceLog): Promise<boolean> => {
+      setBusy(true);
+      try {
+        // NOT coalesced: a copilot turn is not a drag sweep, and collapsing its
+        // act into the user's preceding one would erase an authored edit.
+        const outcome = await foldAndAdopt(log);
+        if (!outcome.ok) {
+          setError(`the copilot's log does not fold: ${outcome.failure.message}`);
+          return false;
+        }
+        setError(null);
+        return true;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [foldAndAdopt],
   );
 
   const undo = useCallback(async (): Promise<void> => {
@@ -151,5 +209,5 @@ export function useSession(initialLog: WorkspaceLog): Session {
     [state],
   );
 
-  return { state, error, busy, apply, undo, nextTurn };
+  return { state, error, busy, apply, adopt, undo, nextTurn };
 }

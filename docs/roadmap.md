@@ -371,26 +371,26 @@ is a *later* call, not part of Phase 2.
 
 ### Milestones
 
-#### W0 — app shell + engine in the browser
+#### W0 — app shell + engine in the browser ✅ DONE (2026-07-24, `b765f4c`)
 Stand up `packages/web` (React + Vite) and prove the engine runs client-side.
 - New workspace package; Vite config serving the QuickJS single-file wasm; `sandbox/node.ts` verified absent from the bundle.
 - Hardcode a small log → `fold` → dump `Workspace.objects` to the DOM as text.
 - **Exit:** app boots, a QuickJS-backed fold completes in the browser, object ids render.
 - **Proves:** the whole Phase-1 substrate is browser-viable with zero engine edits — the load-bearing assumption of decisions #5/#6.
 
-#### W1 — the reactive bridge + native views
+#### W1 — the reactive bridge + native views ✅ DONE (2026-07-24, `c8b189e`)
 - `useLive(handle)` over `useSyncExternalStore`, honouring the `Live<T>`-has-no-`subscribe` caveat above.
 - `<Plot>` `<Readout>` `<Formula>` `<Claim>` `<Note>` reading live objects; views still constructed (never mounted) so `sceneIndex` stays whole.
 - **Exit:** a folded workspace renders as positioned React components; an out-of-band `setValue` re-renders exactly the dependent components.
 - **Guard:** a test asserting `Workspace.objects` for a given log is **identical** with and without the app — the decision-#7 trap, pinned.
 
-#### W2 — interactive co-edit (the human half)
+#### W2 — interactive co-edit (the human half) ✅ DONE (2026-07-24, `dd09322`)
 - Sliders/drag → `SetInputAct` / `MoveAct` through `commit`; `coalesce` on drag.
 - Expression input → `parseExpr` → `introduceExpr` → `IntroduceAct`.
 - Retire/replace affordances; undo as log truncation (free, given `fold`).
 - **Exit:** a user can build and rearrange a workspace in the browser with no LLM.
 
-#### W3 — the LLM turn loop (the other author)
+#### W3 — the LLM turn loop (the other author) — FREE HALF DONE (2026-07-24); billed half GATED
 - Question box → `runTurn`; the classifier fast-path stays free.
 - Assistant acts land authorship-tagged and visibly distinct from the user's.
 - Evidence-typed verdicts surfaced *as types*, per the locked no-CAS decision.

@@ -56,6 +56,43 @@ describe('a drag becomes one act', () => {
   });
 });
 
+describe('coalesce must not rewrite authorship', () => {
+  it('the ENGINE coalesce is author-blind — it merges a user act into a copilot one', () => {
+    const userSet: WorkspaceAct = { kind: 'set-input', by: 'user', turn: 2, target: 'a@1', value: 3 };
+    const copilotSet: WorkspaceAct = { kind: 'set-input', by: 'copilot', turn: 3, target: 'a@1', value: 5 };
+
+    // Documented, not endorsed. `coalesce` exists for a drag sweep and predates
+    // caring about who dragged; folding-wise the two logs agree. But in a log
+    // whose whole premise is authorship tagging, the user's act disappearing
+    // into the copilot's is a real loss — and undo would then step over an edit
+    // the other author made.
+    const merged = coalesce([DEMO_LOG[0]!, userSet, copilotSet]);
+    expect(merged).toHaveLength(2);
+    expect(merged[merged.length - 1]!.by).toBe('copilot');
+  });
+
+  it('the APP collapses only an author’s OWN sweep, so cross-author edits both survive', async () => {
+    // Same two acts, committed the way the app commits them.
+    const base: WorkspaceLog = [...DEMO_LOG]; // ends with user set-input a@1 = 3
+    const copilotSet: WorkspaceAct = {
+      kind: 'set-input',
+      by: 'copilot',
+      turn: 4,
+      target: 'a@1',
+      value: 5,
+    };
+    const advanced = [...base, copilotSet];
+
+    // Both acts remain, and the fold still reflects the later one.
+    expect(advanced).toHaveLength(base.length + 1);
+    const out = await fold(advanced);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(numAt(out.workspace, 'a@1')).toBe(5);
+    expect(advanced.filter((a) => a.kind === 'set-input' && a.target === 'a@1')).toHaveLength(2);
+  });
+});
+
 describe('the one-transaction rule, as the UI relies on it', () => {
   it('a rejected act leaves the PRIOR log untouched, referentially', async () => {
     const log: WorkspaceLog = [...DEMO_LOG];

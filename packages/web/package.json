@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@isomat/copilot": "workspace:*",
     "@isomat/core": "workspace:*",
     "@isomat/objects": "workspace:*",
     "@isomat/parse": "workspace:*",
