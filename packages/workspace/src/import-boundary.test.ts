@@ -31,7 +31,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 // packages/workspace/src → repo root
 const ROOT = resolve(HERE, '../../..');
 
-/** Discipline module basenames that shed in Stabilize (§1.1). */
+/** Discipline module basenames that shed in Stabilize (§1.1, §2.3). */
 const DISCIPLINES = [
   'automata',
   'graph',
@@ -40,7 +40,11 @@ const DISCIPLINES = [
   'linalg',
   'field',
   'structure',
+  'interaction',
 ];
+
+/** Every package's `src` tree — the whole main path plus the quarantine. */
+const PACKAGES = ['core', 'lesson', 'render', 'library', 'host', 'workspace', 'substrate'];
 
 /** Playback modules the main path must never reach for. */
 const PLAYBACK = ['lesson', 'timeline', 'player'];
@@ -106,5 +110,14 @@ describe('import boundary — the Stabilize fence', () => {
 
   it('host (sandbox) source imports no discipline library', () => {
     expect(offences('packages/host/src', DISCIPLINES)).toEqual([]);
+  });
+
+  // S3 extension: the disciplines were SHED (§1, §2.3). No source anywhere — not
+  // even the quarantine — imports one, because there is nothing left to import.
+  // This is the fence that keeps the shed shed: a future re-introduction fails
+  // here rather than quietly re-growing the deleted surface.
+  it('NO package source imports any shed discipline (automata / graph / probability / calculus / linalg / field / structure / interaction)', () => {
+    const all = PACKAGES.flatMap((pkg) => offences(`packages/${pkg}/src`, DISCIPLINES));
+    expect(all).toEqual([]);
   });
 });

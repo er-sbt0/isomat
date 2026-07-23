@@ -6,5 +6,6 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["node"]
   },
-  "include": ["src", "demo/main.ts"]
+  "//": "demo/main.ts (a browser DEMO built separately by demo/build.mjs) constructs the discipline-shaped views SHED in Stabilize S3 (StateGraphView, StripView, …). It is dropped from the package typecheck; the harness is orphaned pending the S5 verify/run.sh prune.",
+  "include": ["src"]
 }

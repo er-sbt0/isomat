@@ -155,5 +155,17 @@ export const GUEST_PRELUDE = String.raw`
   for (var i = 0; i < names.length; i++) {
     globalThis[names[i]] = proxyFor(roots[names[i]], undefined, undefined);
   }
+
+  // The flat native surface (Stabilize section 5): one host root holds the whole
+  // scope object; each of its function members becomes a bare global. Reading a
+  // member off the scope proxy yields a method stub that dispatches an invoke, so
+  // param(...), plot(...), expr(...) call straight through to the host.
+  if (typeof globalThis.__SCOPE === 'string') {
+    var scopeProxy = proxyFor(globalThis.__SCOPE, undefined, undefined);
+    var fns = JSON.parse(globalThis.__SCOPE_FNS);
+    for (var s = 0; s < fns.length; s++) {
+      globalThis[fns[s]] = scopeProxy[fns[s]];
+    }
+  }
 })();
 `;

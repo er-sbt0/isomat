@@ -16,7 +16,7 @@
 import { createWorld } from '@isomat/core';
 import type { CorrespondenceGraph, Handle, Id } from '@isomat/core';
 import { createStage, sceneIndex } from '@isomat/render';
-import { createProgramScope } from '@isomat/library';
+import { createNativeScope } from '@isomat/library';
 import { QuickJSHost, isolate } from '@isomat/host';
 import { newNodeContext } from '@isomat/host/node';
 import type { ExecutableAct, WorkspaceLog } from './act.js';
@@ -42,7 +42,7 @@ export interface FoldEnv {
 export async function createFoldEnv(): Promise<FoldEnv> {
   const world = createWorld();
   const stage = createStage(world);
-  const scope = createProgramScope(world, stage);
+  const scope = createNativeScope(world, stage);
   const ctx = await newNodeContext();
   const host = new QuickJSHost(ctx, { budget: { authorMs: 10_000 }, lintGate: false });
   host.defineScope(scope as unknown as Record<string, unknown>);

@@ -6,10 +6,13 @@
  * core-only in `@isomat/host`, but its tests couple to `render`/`library`, so
  * they live here — the package that already owns those deps — rather than
  * forcing them back into a host that now stands on `core` alone. M2 lifts both
- * `tools.ts` and these tests into the copilot seam. Until then they exercise the
- * still-present discipline scope and will be revised when S3 sheds it.
+ * `tools.ts` and these tests into the copilot seam. S3 re-authored the scene
+ * from the discipline vocabulary the shed removed: the matrix / loop /
+ * vector-field arms of `inspect` / `evalAt` went with their objects; what
+ * survives is the causal/experiment core over a param / scalar / claim / plotted
+ * fn.
  *
- * The scene is built IN-PROCESS: a real world, stage and program scope, driven
+ * The scene is built IN-PROCESS: a real world, stage and native scope, driven
  * by direct library calls instead of QuickJS. That is the same split
  * conversation.test.ts made — the sibling `.sandbox.test.ts` proves the tools
  * against a scene a real guest program folded; this proves the rules
@@ -19,8 +22,8 @@
 import { describe, expect, it } from 'vitest';
 import { createWorld } from '@isomat/core';
 import { createStage, sceneIndex } from '@isomat/render';
-import { createProgramScope } from '@isomat/library';
-import type { ProgramScope } from '@isomat/library';
+import { createNativeScope } from '@isomat/library';
+import type { NativeScope } from '@isomat/library';
 import { appendFragment, bisectFlip, counterfactual, evalAt, inspect, runTool, setInput, whyChanged } from '@isomat/host';
 import type { CompileFragment, FoldScene } from '@isomat/host';
 import { replayLog } from '@isomat/host';
@@ -32,31 +35,21 @@ import type { ConversationLog, Settable } from '@isomat/host';
  * region whose boundary is a loop — all MENTIONED, because the boundary rule
  * says a tool reaches what the manifest offers and nothing else.
  */
-function build(scope: ProgramScope) {
-  const { M, Field, Calc, LinAlg, lesson } = scope;
+function build(scope: NativeScope) {
+  const spin = scope.param('spin', 1, { range: [-2, 2] });
+  const doubled = scope.derive(() => 2 * spin.value, { label: 'doubled' });
+  const under = scope.claim({ lhs: doubled, rhs: 3, relation: '<=', label: 'doubled stays under 3' });
+  // a plot projects its rule as an id-reachable `fn` handle — evalAt's subject
+  const plot = scope.plot((x) => spin.value / x, { domain: [1, 5], label: 'f' });
+  const f = plot.elements[0] as unknown as { id: string; kind: string };
 
-  const spin = M.parameter('spin', 1, { range: [-2, 2] });
-  const doubled = M.derived(() => 2 * spin.value, 'doubled');
-  const under = M.claim({ lhs: doubled, rhs: 3, relation: '<=', label: 'doubled stays under 3' });
-  const F = Field.vectorField((x, y) => [-spin.value * y, spin.value * x], { label: 'F' });
-  const f = Calc.fn((x) => 1 / x, { label: 'f' });
-  const A = LinAlg.matrix([
-    [spin, 0],
-    [0, 1],
-  ]);
-  const omega = Field.rectangle({ x0: -1, y0: -1, x1: 1, y1: 1, label: '\\Omega' });
-
-  lesson.beat('an instrumented scene');
-  lesson.expose(spin, { as: 'draggable' });
-  lesson.say`watch ${doubled} obey ${under} over ${F}, ${f}, ${A}, ${omega.boundary}`;
-
-  return { spin, doubled, under, F, f, A, omega };
+  return { spin, doubled, under, f };
 }
 
 function scene() {
   const world = createWorld();
   const stage = createStage(world);
-  const scope: ProgramScope = createProgramScope(world, stage);
+  const scope: NativeScope = createNativeScope(world, stage);
   const refs = build(scope);
 
   // the hook contract: the scene map IS sceneIndex, built per probe so it
@@ -71,16 +64,16 @@ function scene() {
   // Program/fragment sources are interpreted through THUNKS — the same
   // stand-in for QuickJS execution the conversation unit tests use; the
   // sibling .sandbox.test.ts runs real guest code through the same seam.
-  const thunks: Record<string, (sc: ProgramScope) => void> = {
+  const thunks: Record<string, (sc: NativeScope) => void> = {
     build,
     noteBeat: (sc) => {
-      sc.lesson.beat('a note');
+      sc.note`a note`;
     },
   };
   const fold: FoldScene = (candidate) => {
     const w = createWorld();
     const st = createStage(w);
-    const sc = createProgramScope(w, st);
+    const sc = createNativeScope(w, st);
     const result = replayLog(candidate, {
       execute: (entry) => {
         const run = thunks[entry.source];
@@ -130,28 +123,6 @@ describe('inspect — the full structured value of one object', () => {
     expect(r.ok && (r.value as { holds: boolean }).holds).toBe(false);
   });
 
-  it('a matrix: entries as rows, reading live cells', () => {
-    const s = scene();
-    const r = inspect(s.index(), s.A.id);
-    expect(r.ok && (r.value as { entries: number[][] }).entries).toEqual([
-      [1, 0],
-      [0, 1],
-    ]);
-  });
-
-  it('a loop: vertices and signed area', () => {
-    const s = scene();
-    const r = inspect(s.index(), s.omega.boundary.id);
-    expect(r.ok).toBe(true);
-    if (r.ok) {
-      const v = r.value as { vertices: number[][]; area: number };
-      expect(v.vertices).toHaveLength(4);
-      // signed area — the SIGN is the orientation, so only the magnitude is
-      // the rectangle's geometry
-      expect(Math.abs(v.area)).toBeCloseTo(4, 9);
-    }
-  });
-
   it('a derived scalar falls through to {id, kind, label, value}', () => {
     const s = scene();
     const r = inspect(s.index(), s.doubled.id);
@@ -172,40 +143,28 @@ describe('inspect — the full structured value of one object', () => {
     }
   });
 
-  it('a retired object is unreachable — retire does its job here too', () => {
-    const s = scene();
-    s.scope.lesson.retire(s.doubled);
-    const r = inspect(s.index(), s.doubled.id);
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error.code).toBe('unknown-id');
-  });
 });
 
 describe('evalAt — sample a rule the object already carries', () => {
-  it('a vector field at (x, y)', () => {
+  it('a fn at x', () => {
     const s = scene();
-    // rule is [-spin·y, spin·x] with spin = 1
-    expect(evalAt(s.index(), s.F.id, [1, 1])).toEqual({ ok: true, value: [-1, 1] });
+    // rule is spin / x with spin = 1
+    expect(evalAt(s.index(), s.f.id, [4])).toEqual({ ok: true, value: 0.25 });
   });
 
   it('reads the rule LIVE: a dragged parameter changes the sample', () => {
     const s = scene();
     s.spin.setValueLive(-2);
-    expect(evalAt(s.index(), s.F.id, [1, 1])).toEqual({ ok: true, value: [2, -2] });
-  });
-
-  it('a fn at x', () => {
-    const s = scene();
-    expect(evalAt(s.index(), s.f.id, [4])).toEqual({ ok: true, value: 0.25 });
+    expect(evalAt(s.index(), s.f.id, [2])).toEqual({ ok: true, value: -1 });
   });
 
   it('wrong arity is a typed error naming what was wanted', () => {
     const s = scene();
-    const r = evalAt(s.index(), s.F.id, [1]);
+    const r = evalAt(s.index(), s.f.id, [1, 2]);
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.error.code).toBe('bad-args');
-      expect(r.error.message).toContain('2 finite coordinates');
+      expect(r.error.message).toContain('1 finite coordinate');
     }
   });
 
@@ -218,7 +177,7 @@ describe('evalAt — sample a rule the object already carries', () => {
 
   it('a pole is a domain error, not Infinity smuggled through JSON', () => {
     const s = scene();
-    const r = evalAt(s.index(), s.f.id, [0]); // 1/x at 0
+    const r = evalAt(s.index(), s.f.id, [0]); // spin/x at 0
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.code).toBe('domain');
   });
@@ -253,13 +212,12 @@ describe('runTool — errors are data, never a throw', () => {
 
   it('a scene that throws mid-read comes back as a failed result', async () => {
     const s = scene();
-    const bomb = s.scope.M.claim({
+    const bomb = s.scope.claim({
       predicate: () => {
         throw new Error('the predicate exploded');
       },
       label: 'unstable',
     });
-    s.scope.lesson.say`${bomb}`;
     const out = await runTool({ tool: 'inspect', id: bomb.id }, { scene: s.index });
     expect(out.result.ok).toBe(false);
     if (!out.result.ok) {

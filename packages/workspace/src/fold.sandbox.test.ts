@@ -22,7 +22,8 @@ import type { WorkspaceAct, WorkspaceLog } from './act.js';
 
 const at = { x: 120, y: 240 };
 
-/** introduce: mint the draggable parameter `a` with the EXPLICIT stable id `a@1`. */
+/** introduce: mint the draggable parameter `a` with the EXPLICIT stable id `a@1`.
+ *  No `expose`/`show` — the native surface auto-registers on construction (§5.1). */
 const INTRODUCE_A: WorkspaceAct = {
   kind: 'introduce',
   by: 'user',
@@ -30,11 +31,7 @@ const INTRODUCE_A: WorkspaceAct = {
   id: 'a@1',
   at,
   source: 'introduce a = 2',
-  js: [
-    'const a = M.parameter("a", 2, { range: [-5, 5], id: "a@1" });',
-    'lesson.beat("a");',
-    'lesson.expose(a, { as: "draggable" });',
-  ].join('\n'),
+  js: 'const a = param("a", 2, { range: [-5, 5], id: "a@1" });',
 };
 
 /** author: reach `a` back by id, derive y = a² (stable id `y@2`), and plot f(x) = a·x. */
@@ -43,12 +40,10 @@ const AUTHOR_Y: WorkspaceAct = {
   by: 'copilot',
   turn: 2,
   js: [
-    'const a = M.byId("a@1");',
-    'const y = M.derived(() => a.value * a.value, "y = a^2", { id: "y@2" });',
-    'const f = Calc.fn((x) => a.value * x, { label: "f" });',
-    'lesson.beat("y and a plot");',
-    'lesson.show(View.plot(f, { domain: [-5, 5], label: "f" }));',
-    'lesson.show(View.readout(y, { label: "y" }));',
+    'const a = byId("a@1");',
+    'const y = derive(() => a.value * a.value, { label: "y = a^2", id: "y@2" });',
+    'plot((x) => a.value * x, { domain: [-5, 5], label: "f" });',
+    'readout(y, { label: "y" });',
   ].join('\n'),
 };
 
@@ -108,7 +103,7 @@ describe('a hand-built co-edit log, folded through QuickJS', () => {
       kind: 'author',
       by: 'copilot',
       turn: 3,
-      js: 'const missing = M.byId("nope@9");\nlesson.beat("unreached");',
+      js: 'const missing = byId("nope@9");',
     };
 
     const committed = await commit(log, BAD, tryFold);
@@ -151,11 +146,7 @@ describe('a hand-built co-edit log, folded through QuickJS', () => {
       kind: 'author',
       by: 'user',
       turn: 0,
-      js: [
-        'const p = M.parameter("p", 0, { range: [-1, 1] });',
-        'lesson.beat("p");',
-        'lesson.expose(p, { as: "draggable" });',
-      ].join('\n'),
+      js: 'const p = param("p", 0, { range: [-1, 1] });',
     };
 
     const alone = await fold([INTRODUCE_A]);
@@ -171,11 +162,7 @@ describe('a hand-built co-edit log, folded through QuickJS', () => {
     // ── the counter-example that proves WHY the policy exists ──
     // an object minted WITHOUT an explicit id gets a positional `<kind>#<n>` id,
     // which DOES shift when an earlier act is inserted.
-    const POSITIONAL = [
-      'const a = M.parameter("a", 2, { range: [-5, 5] });', // no id → positional
-      'lesson.beat("a");',
-      'lesson.expose(a, { as: "draggable" });',
-    ].join('\n');
+    const POSITIONAL = 'const a = param("a", 2, { range: [-5, 5] });'; // no id → positional
     const posAlone = await fold([{ kind: 'author', by: 'user', turn: 1, js: POSITIONAL }]);
     const posAfter = await fold([unrelated, { kind: 'author', by: 'user', turn: 1, js: POSITIONAL }]);
     expect(posAlone.ok && posAfter.ok).toBe(true);

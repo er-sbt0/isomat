@@ -57,6 +57,8 @@ export class QuickJSHost {
   readonly bridge: Bridge;
   readonly budget: FrameBudget;
   private readonly roots: Record<string, string> = {};
+  /** The flat native scope, registered as one root whose members become bare globals. */
+  private flatScope: { readonly ref: string; readonly names: readonly string[] } | null = null;
   private booted = false;
 
   constructor(
@@ -73,24 +75,17 @@ export class QuickJSHost {
     this.roots[name] = this.bridge.register(obj);
   }
 
-  /** Bind every member of the program scope as a guest global. */
+  /**
+   * Bind the flat native authoring surface (Stabilize §5): each function member
+   * of `scope` becomes a BARE guest global — the guest calls `param(...)`,
+   * `plot(...)`, `expr\`...\``, not `M.parameter(...)`. The whole scope registers
+   * as ONE host root; the prelude spreads its function members into globals.
+   * This replaces the 13-member `M/View/lesson/...` injection.
+   */
   defineScope(scope: Record<string, unknown>): void {
-    for (const name of [
-      'M',
-      'Prob',
-      'Calc',
-      'LinAlg',
-      'Graph',
-      'Field',
-      'View',
-      'Layout',
-      'Interaction',
-      'F',
-      'lesson',
-    ] as const) {
-      const member = scope[name];
-      if (member && typeof member === 'object') this.defineGlobal(name, member as object);
-    }
+    if (this.booted) throw new Error('defineScope must be called before run()');
+    const names = Object.keys(scope).filter((k) => typeof scope[k] === 'function');
+    this.flatScope = { ref: this.bridge.register(scope), names };
   }
 
   private boot(): void {
@@ -101,6 +96,16 @@ export class QuickJSHost {
     const rootsHandle = this.ctx.newString(JSON.stringify(this.roots));
     this.ctx.setProp(this.ctx.global, '__ROOTS', rootsHandle);
     rootsHandle.dispose();
+    // the flat native scope: one root, whose function members the prelude
+    // spreads into bare globals (Stabilize §5)
+    if (this.flatScope) {
+      const refHandle = this.ctx.newString(this.flatScope.ref);
+      this.ctx.setProp(this.ctx.global, '__SCOPE', refHandle);
+      refHandle.dispose();
+      const fnsHandle = this.ctx.newString(JSON.stringify(this.flatScope.names));
+      this.ctx.setProp(this.ctx.global, '__SCOPE_FNS', fnsHandle);
+      fnsHandle.dispose();
+    }
     this.evalOrThrow(GUEST_PRELUDE, '<prelude>', this.opts.budget?.authorMs ?? this.budget.authorMs);
     this.bridge.bindGuestEntry();
     this.booted = true;

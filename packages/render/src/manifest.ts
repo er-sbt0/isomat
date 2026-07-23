@@ -56,7 +56,6 @@ import type {
   VaryPayload,
 } from '@isomat/lesson';
 import type { Stage } from './stage.js';
-import { collect } from './scene.js';
 import { labelOf } from './util.js';
 
 /** How a claim's verdict was reached — mirrors `ClaimEvidence` in the library. */
@@ -153,9 +152,97 @@ function labelIfNamed(h: Handle): string | undefined {
   return l === h.id ? undefined : l;
 }
 
-// The timeline walk `collect` and the scene index `sceneIndex` moved to
-// `scene.ts` (Stabilize §2.1). `collect` is imported above; the prose manifest
-// below reuses it.
+// ─────────────────────────── the timeline walk ───────────────────────────
+// The native scene boundary (`scene.ts`) no longer reads the timeline. This
+// prose manifest is QUARANTINE playback (Stabilize §2.1) and still walks it, so
+// `collect` lives here now — the only remaining consumer — rather than in the
+// timeline-free `scene.ts`.
+
+/**
+ * Every handle a step mentions, and whether the step makes it student-movable.
+ *
+ * `vary` counts as movable-adjacent but NOT draggable: the lesson moved it, the
+ * student cannot. Only `expose` and `enableInteraction` hand over control, and
+ * conflating them would tell a follow-up it may set something it cannot.
+ */
+export function collect(
+  node: TimelineNode,
+  seen: Map<Id, Handle>,
+  draggable: Set<Id>,
+  narration: string[],
+  retired: Set<Id>,
+): void {
+  if (node.type === 'cascade' || node.type === 'parallel' || node.type === 'loop') {
+    const children = (node as { children?: readonly TimelineNode[] }).children ?? [];
+    for (const c of children) collect(c, seen, draggable, narration, retired);
+    const iterations = (node as { iterations?: readonly TimelineNode[] }).iterations ?? [];
+    for (const c of iterations) collect(c, seen, draggable, narration, retired);
+    return;
+  }
+  if (node.type !== 'action') return;
+
+  const keep = (h: unknown): void => {
+    if (isHandle(h) && !seen.has(h.id)) seen.set(h.id, h);
+  };
+  const p = node.payload as Record<string, unknown> | undefined;
+  if (!p) return;
+
+  switch (node.op) {
+    case 'say': {
+      const say = p as unknown as SayPayload;
+      narration.push(say.strings.join('…').trim());
+      for (const m of say.mentions) keep(m);
+      return;
+    }
+    case 'show':
+      keep((p as unknown as ShowPayload).subject);
+      return;
+    case 'hide':
+      keep((p as unknown as HidePayload).subject);
+      return;
+    case 'retire': {
+      retired.add((p as unknown as RetirePayload).subject.id);
+      return;
+    }
+    case 'replace': {
+      const r = p as unknown as ReplacePayload;
+      retired.add(r.old.id);
+      keep(r.next);
+      return;
+    }
+    case 'focus':
+      for (const s of (p as unknown as FocusPayload).subjects) keep(s);
+      return;
+    case 'vary':
+      keep((p as unknown as VaryPayload).target);
+      return;
+    case 'expose': {
+      const e = p as unknown as ExposePayload;
+      keep(e.subject);
+      draggable.add(e.subject.id);
+      return;
+    }
+    case 'enableInteraction': {
+      const i = (p as unknown as EnableInteractionPayload).interaction;
+      keep(i.target);
+      keep(i.along);
+      draggable.add(i.target.id);
+      return;
+    }
+    case 'link': {
+      const l = p as unknown as LinkPayload;
+      keep(l.a);
+      for (const t of l.targets) keep(t);
+      return;
+    }
+    default: {
+      for (const v of Object.values(p)) {
+        if (Array.isArray(v)) v.forEach(keep);
+        else keep(v);
+      }
+    }
+  }
+}
 
 // ─────────────────────────────── the manifest ───────────────────────────────
 

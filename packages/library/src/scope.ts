@@ -1,180 +1,153 @@
 /**
- * scope.ts — the program-scope binding (M3 open question 4).
+ * scope.ts — the flat native authoring surface (Stabilize §5, §5.1).
  *
- * `createProgramScope(world, stage)` yields the exact authoring surface the
- * two spike programs import — `M`, `Prob`, `View`, `Layout`, `F`, `lesson` —
- * all bound to ONE world and ONE stage. A beats program written against the
- * spike `api.ts` sketches runs against this scope unmodified.
+ * `createNativeScope(world, stage)` yields the ~10 bare functions the guest is
+ * handed — `expr, span, param, derive, plot, readout, claim, link, note, byId`
+ * — bound to ONE world and ONE stage. This replaces the 13-member
+ * `createProgramScope` (`M / Prob / Calc / LinAlg / Graph / Field / View /
+ * Layout / Interaction / F / lesson`): the discipline namespaces and the lesson
+ * verbs are gone, and there is no `M.` / `View.` / `lesson.` ceremony. The whole
+ * object is injected FLAT into the guest global by `host.defineScope(...)`, so a
+ * fragment calls `param(...)`, `plot(...)`, `expr\`...\`` directly.
  *
- * The active-scope registry is how an UNMODIFIED program (which does
- * `import { M, ... } from "./api"`) receives its bindings: the bundler (or
- * vitest resolver) aliases that import to a shim (spike-api/*.ts) which
- * re-exports `getActiveScope()` at its module-evaluation moment. The harness
- * therefore: creates world + stage, `setActiveScope(createProgramScope(...))`,
- * then dynamically imports the beats module — whose top-level code IS the
- * program. One scope per world (the lesson layer already enforces one lesson
- * per world).
+ * ## Auto-register on construction (§5.1, RESOLVED)
  *
- * This is milestone 4's stand-in for the milestone-5 QuickJS host: there the
- * same scope members are marshalled into the guest instead of imported.
+ * There is NO `show` / `place` / `expose` verb. Every object an act builds
+ * registers into `stage.registered` (or, for the view primitives, adds itself to
+ * `stage.views` in the `View` base) the moment it is constructed, so it appears
+ * in `sceneIndex` with no further ceremony — a bare `param` surfaces in the
+ * scene with no timeline. Params are drag-interactive by default (`createParameter`
+ * carries `setValueLive`); interactivity is cheap and not the point.
  */
 
-import type { Collection, Handle, Slot, World } from '@isomat/core';
-import { createF, createLesson } from '@isomat/lesson';
-import type { FormulaBuilder, Lesson } from '@isomat/lesson';
-import type { Stage } from '@isomat/render';
-import { createAutomata } from './automata.js';
-import type { AutomataLib, Word } from './automata.js';
-import { createGraphLib } from './graph.js';
-import type { GraphLib } from './graph.js';
-import { createProbability } from './probability.js';
-import type { ProbLib } from './probability.js';
-import { createCalculus } from './calculus.js';
-import type { CalcLib } from './calculus.js';
-import { createLinearAlgebra } from './linalg.js';
-import type { LinAlgLib } from './linalg.js';
+import type { Handle, Relation, World } from '@isomat/core';
+import { createF } from '@isomat/lesson';
+import type { Formula, FormulaSpan, SpanSpec } from '@isomat/lesson';
+import { NoteView, sceneIndex } from '@isomat/render';
+import type { NoteMention, NoteView as NoteViewType, Stage } from '@isomat/render';
 import { createParameter } from './parameter.js';
 import type { Parameter } from './parameter.js';
-import { createFieldLib } from './field.js';
-import type { FieldLib } from './field.js';
-import { createInteraction } from './interaction.js';
-import type { InteractionLib } from './interaction.js';
 import { derivedNumber } from './numeric.js';
 import type { LabeledNumber } from './numeric.js';
 import { createClaim } from './claim.js';
 import type { Claim, ClaimOpts } from './claim.js';
-import { sceneIndex } from '@isomat/render';
 import { createViews } from './views.js';
-import type { LayoutLib, ViewLib } from './views.js';
+import type { NativeViewLib, PlotOpts, PlotSubject } from './views.js';
+import type { PlotView, ReadoutView } from '@isomat/render';
 
 /**
- * `M` is the union the three spikes settled: automata constructors + slot/range
- * + `parameter` (the Δ3 interaction-mutable scalar the FTC/determinant spikes
- * forced — kernel because both continuous disciplines need it).
+ * The flat native authoring surface. Every member is a bare function; there is
+ * no namespace object. `host.defineScope(scope)` spreads these into the guest.
  */
-export interface MLib extends AutomataLib {
-  slot<T>(initial: T): Slot<T>;
-  range(n: number): readonly number[];
-  /** Re-exported for symmetry with `M.words` — the reactive source type. */
-  collection<T>(initial?: readonly T[]): Collection<T>;
-  /** Δ3 — a reactive, draggable scalar with a range (see parameter.ts).
-   *  `opts.id` stamps an explicit stable handle id — the workspace stable-id
-   *  seam (roadmap M1); omit it for a positional `parameter#n` id. */
-  parameter(
-    name: string,
-    value: number,
-    opts: { range: readonly [number, number]; id?: string },
-  ): Parameter;
-  /** A live scalar computed from other reactive cells. `fn` is re-run on read
-   *  and tracks whatever it touches, so a dragged Parameter updates it — the
-   *  same mechanism behind `LinAlg.determinant` and `Calc` numerics. Reach for
-   *  this instead of hand-building an object with a `value` getter. */
-  derived(fn: () => number, label?: string, opts?: { id?: string }): LabeledNumber;
-  /** A live proposition — two quantities and an asserted relation, or a
-   *  predicate closure. Its `status` re-derives like any other reactive value,
-   *  so `View.claim` shows the student whether their drag broke it. See
-   *  claim.ts. */
+export interface NativeScope {
+  readonly world: World;
+  readonly stage: Stage;
+
+  /** An addressable live math expression (the tagged-template span builder). */
+  expr(strings: TemplateStringsArray, ...parts: ReadonlyArray<string | SpanSpec>): Formula;
+  /** A role-named TeX fragment, interpolated into an `expr`. */
+  span(role: string, tex: string): SpanSpec;
+  /** A live, draggable scalar with a range. `opts.id` stamps a stable handle id. */
+  param(name: string, value: number, opts: { range: readonly [number, number]; id?: string }): Parameter;
+  /** A live scalar computed from other reactive cells; re-run on read, tracks its inputs. */
+  derive(fn: () => number, opts?: { label?: string; id?: string }): LabeledNumber;
+  /** Render a numeric rule y = f(x) over a domain. */
+  plot(subject: PlotSubject, opts: PlotOpts): PlotView;
+  /** A live numeric display, optionally watched against a second quantity. */
+  readout(quantity: LabeledNumber | Parameter, opts?: { label?: string; compareTo?: LabeledNumber | Parameter }): ReadoutView;
+  /** An evidence-typed proposition: two quantities and a relation, or a predicate. */
   claim(opts: ClaimOpts): Claim;
-  /**
-   * Reach an object authored by an EARLIER turn, by its handle id.
-   *
-   * Only a conversation needs this (roadmap 4b). A single program holds its
-   * own objects in `const`s; a fragment appended on turn 2 runs in its own
-   * scope and cannot see them, so it names them by the ids the scene manifest
-   * gave it. Throws with the id listed rather than returning undefined —
-   * a fragment that silently authored against `undefined` would gate clean and
-   * then fail somewhere unrelated, which is the failure mode the whole gate
-   * exists to avoid.
-   *
-   * The index is exactly what the manifest offered, so a fragment cannot name
-   * an object the student was never shown, and cannot resurrect a retired one.
-   */
+  /** A correspondence edge between objects (no timeline step). */
+  link(a: Handle, b: Handle | readonly Handle[], rel: Relation): void;
+  /** Narration as an editable, auto-registered text object. */
+  note(strings: TemplateStringsArray, ...mentions: readonly NoteMention[]): NoteViewType;
+  /** Reach an object an earlier act authored, by its handle id. Throws if absent. */
   byId<T = Handle>(id: string): T;
 }
 
-export interface ProgramScope {
-  readonly world: World;
-  readonly stage: Stage;
-  readonly lesson: Lesson;
-  readonly F: FormulaBuilder;
-  readonly M: MLib;
-  readonly Prob: ProbLib;
-  readonly Calc: CalcLib;
-  readonly LinAlg: LinAlgLib;
-  readonly Graph: GraphLib;
-  /** Vector/scalar fields over the plane — see field.ts. */
-  readonly Field: FieldLib;
-  readonly View: ViewLib;
-  readonly Layout: LayoutLib;
-  /** Concrete affordances (the drag rail) — see interaction.ts. */
-  readonly Interaction: InteractionLib;
-}
-
-let active: ProgramScope | null = null;
-
-export function setActiveScope(scope: ProgramScope): void {
-  active = scope;
-}
-
-export function getActiveScope(): ProgramScope {
-  if (!active) {
-    throw new Error(
-      'no active program scope — call setActiveScope(createProgramScope(world, stage)) ' +
-        'before importing a beats program',
-    );
-  }
-  return active;
-}
-
-export function createProgramScope(world: World, stage: Stage): ProgramScope {
+export function createNativeScope(world: World, stage: Stage): NativeScope {
   if (stage.world !== world) {
-    throw new Error('createProgramScope: the stage must belong to the same world');
+    throw new Error('createNativeScope: the stage must belong to the same world');
   }
-  const lesson = createLesson(world);
   const F = createF(world);
-  const automata = createAutomata(world);
-  const Prob = createProbability(world);
-  const Calc = createCalculus(world);
-  const LinAlg = createLinearAlgebra(world);
-  const Graph = createGraphLib(world);
-  const Field = createFieldLib(world);
-  const { View, Layout } = createViews(stage);
-  const Interaction = createInteraction(world);
+  const { View } = createViews(stage);
 
-  const M: MLib = Object.freeze({
-    ...automata,
-    slot: <T>(initial: T): Slot<T> => world.slot(initial),
-    range: (n: number): readonly number[] =>
-      Object.freeze(Array.from({ length: Math.max(0, Math.floor(n)) }, (_, i) => i)),
-    collection: <T>(initial: readonly T[] = []): Collection<T> => world.collection(initial),
-    parameter: (
-      name: string,
-      value: number,
-      opts: { range: readonly [number, number]; id?: string },
-    ): Parameter => createParameter(world, name, value, opts.range, opts.id),
-    derived: (fn: () => number, label?: string, opts?: { id?: string }): LabeledNumber =>
-      derivedNumber(world, fn, label, opts?.id),
-    claim: (opts: ClaimOpts): Claim => createClaim(world, opts),
-    byId: <T = Handle>(id: string): T => {
+  /** Auto-register on construction (§5.1): the object surfaces in the scene. */
+  const register = <T extends Handle>(h: T): T => {
+    stage.registered.push(h);
+    return h;
+  };
+
+  const scope: NativeScope = {
+    world,
+    stage,
+
+    expr(strings, ...parts) {
+      // Register the object (it surfaces in the scene); its render is a
+      // FormulaView the renderer materializes from the scene, not built eagerly
+      // here — a formula carries no eager evaluation, but a claim does (below),
+      // and the two object-constructors keep the same discipline.
+      return register(F.tex(strings as unknown as TemplateStringsArray, ...parts));
+    },
+
+    span(role, tex) {
+      return F.span(role, tex);
+    },
+
+    param(name, value, opts) {
+      return register(createParameter(world, name, value, opts.range, opts.id));
+    },
+
+    derive(fn, opts) {
+      return register(derivedNumber(world, fn, opts?.label, opts?.id));
+    },
+
+    plot(subject, opts) {
+      return View.plot(subject, opts);
+    },
+
+    readout(quantity, opts) {
+      return View.readout(quantity, opts);
+    },
+
+    claim(opts) {
+      // Register the object only. Building a ClaimView here would read `holds`
+      // to validate the subject, evaluating the (possibly-throwing) predicate at
+      // CONSTRUCTION — but a claim's verdict is deliberately read lazily, so a
+      // predicate that throws is data at read time, not a build-time crash.
+      return register(createClaim(world, opts));
+    },
+
+    link(a, b, rel) {
+      world.link(a, b, rel);
+    },
+
+    note(strings, ...mentions) {
+      return new NoteView(stage, {
+        strings: [...(strings as unknown as readonly string[])],
+        mentions,
+      });
+    },
+
+    byId<T = Handle>(id: string): T {
       // Built per call, not cached: a fragment may reference an object an
-      // EARLIER STATEMENT of the same fragment showed, and a cached index
+      // earlier STATEMENT of the same fragment constructed, and a cached index
       // taken at scope construction would predate the whole conversation.
-      const found = sceneIndex(stage).get(id);
+      const index = sceneIndex(stage);
+      const found = index.get(id);
       if (!found) {
-        const available = [...sceneIndex(stage).keys()].slice(0, 20).join(', ');
+        const available = [...index.keys()].slice(0, 20).join(', ');
         throw new Error(
-          `M.byId("${id}") — no object with that id is in the scene. A fragment may only ` +
-            `reference ids the scene manifest listed, and never a retired one. ` +
-            `Available: ${available}${sceneIndex(stage).size > 20 ? ', …' : ''}`,
+          `byId("${id}") — no object with that id is in the scene. A fragment may only ` +
+            `reference ids the scene offered it, and never a retired one. ` +
+            `Available: ${available}${index.size > 20 ? ', …' : ''}`,
         );
       }
       return found as T;
     },
-  });
+  };
 
-  return Object.freeze({
-    world, stage, lesson, F, M, Prob, Calc, LinAlg, Graph, Field, View, Layout, Interaction,
-  });
+  return scope;
 }
 
-export type { AutomataLib, ProbLib, CalcLib, LinAlgLib, GraphLib, FieldLib, ViewLib, LayoutLib, InteractionLib, Word };
+export type { FormulaSpan, NativeViewLib, PlotOpts, PlotSubject };

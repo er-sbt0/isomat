@@ -5,21 +5,19 @@
  * `tools.ts` is core-only and stays in `@isomat/host`, but these tests couple to
  * `render`/`library`, so they run here until M2 lifts them into the copilot seam.
  *
- * `tools.test.ts` proves the tool rules with an in-process scene and thunked
- * folds. This proves what thunks cannot: a scene a QuickJS program actually
- * built answers every probe — inspect, evalAt, whyChanged, counterfactual,
- * bisectFlip — and takes both write acts, with every experiment folding the
- * log through a fresh VM and the LIVE scene never moving.
+ * S3 re-authored the guest program from the discipline/lesson vocabulary the shed
+ * removed to the flat native surface (§5). Every object auto-registers on
+ * construction, so the live-scene checks read the native `sceneIndex` boundary
+ * (via `inspect`) rather than the quarantined timeline-based `sceneManifest`.
  *
  * This is roadmap 4c's exit criterion minus the billed half: the engine can
  * answer "why did that turn red?" causally and name the exact flip threshold.
- * Whether a MODEL asks before narrating is what the recording will buy.
  */
 
 import { describe, expect, it } from 'vitest';
 import { createWorld } from '@isomat/core';
-import { createStage, sceneIndex, sceneManifest } from '@isomat/render';
-import { createProgramScope } from '@isomat/library';
+import { createStage, sceneIndex } from '@isomat/render';
+import { createNativeScope } from '@isomat/library';
 import { QuickJSHost } from '@isomat/host';
 import { newNodeContext } from '@isomat/host/node';
 import {
@@ -36,24 +34,19 @@ import {
 } from '@isomat/host';
 import type { ConversationLog, Settable, CompileFragment, FoldScene, SceneMap } from '@isomat/host';
 
-/** Turn 1: a parameter, a derived, a claim over it, a field to sample. */
+/** Turn 1: a parameter, a derived, a claim over it, and a fn to sample. */
 const PROGRAM = [
-  'const spin = M.parameter("spin", 1, { range: [-2, 2] });',
-  'const doubled = M.derived(() => 2 * spin.value, "doubled");',
-  'const under = M.claim({ lhs: doubled, rhs: 3, relation: "<=", label: "under three" });',
-  'const F = Field.vectorField((x, y) => [-spin.value * y, spin.value * x], { label: "F" });',
-  'const omega = Field.rectangle({ x0: -1, y0: -1, x1: 1, y1: 1, label: "\\\\Omega" });',
-  'lesson.beat("An instrument");',
-  'lesson.show(View.field(F, { over: omega }));',
-  'lesson.expose(spin, { as: "draggable" });',
-  'lesson.show(View.readout(doubled, { label: "doubled" }));',
-  'lesson.show(View.claim(under));',
+  'const spin = param("spin", 1, { range: [-2, 2] });',
+  'const doubled = derive(() => 2 * spin.value, { label: "doubled" });',
+  'const under = claim({ lhs: doubled, rhs: 3, relation: "<=", label: "under three" });',
+  'plot((x) => spin.value / x, { domain: [1, 5], label: "f" });',
+  'readout(doubled, { label: "doubled" });',
 ].join('\n');
 
 async function freshScene() {
   const world = createWorld();
   const stage = createStage(world);
-  const scope = createProgramScope(world, stage);
+  const scope = createNativeScope(world, stage);
   const ctx = await newNodeContext();
   const host = new QuickJSHost(ctx, { budget: { authorMs: 10_000 }, lintGate: false });
   host.defineScope(scope as unknown as Record<string, unknown>);
@@ -90,6 +83,18 @@ function idByLabel(scene: SceneMap, label: string, kind?: string): string {
   throw new Error(`the scene offers nothing labeled "${label}" — it has: ${seen.join(', ')}`);
 }
 
+const numFromInspect = (scene: SceneMap, id: string): number => {
+  const r = inspect(scene, id);
+  if (!r.ok) throw new Error(`inspect(${id}) failed: ${r.error.message}`);
+  return (r.value as { value: number }).value;
+};
+
+const holdsFromInspect = (scene: SceneMap, id: string): boolean => {
+  const r = inspect(scene, id);
+  if (!r.ok) throw new Error(`inspect(${id}) failed: ${r.error.message}`);
+  return (r.value as { holds: boolean }).holds;
+};
+
 describe('a hand-scripted tool sequence against a QuickJS-folded scene', () => {
   it('inspect → evalAt → whyChanged → counterfactual → bisectFlip → setInput → appendFragment', async () => {
     const live = await freshScene();
@@ -100,7 +105,7 @@ describe('a hand-scripted tool sequence against a QuickJS-folded scene', () => {
     const spin = idByLabel(scene(), 'spin', 'parameter');
     const doubled = idByLabel(scene(), 'doubled', 'scalar');
     const under = idByLabel(scene(), 'under three', 'claim');
-    const F = idByLabel(scene(), 'F', 'vectorField');
+    const f = idByLabel(scene(), 'f', 'fn');
 
     // ── inspect: the full value of one object, live ──
     const p = inspect(scene(), spin);
@@ -112,8 +117,8 @@ describe('a hand-scripted tool sequence against a QuickJS-folded scene', () => {
     expect(c.ok && (c.value as { holds: boolean; evidence: string }).holds).toBe(true);
 
     // ── evalAt: sample the guest-authored rule at a point ──
-    // [-spin·y, spin·x] at (1, 1) with spin = 1
-    expect(evalAt(scene(), F, [1, 1])).toEqual({ ok: true, value: [-1, 1] });
+    // spin / x at x = 4 with spin = 1
+    expect(evalAt(scene(), f, [4])).toEqual({ ok: true, value: 0.25 });
 
     // ── whyChanged: causality off the reactive graph, across the bridge ──
     const why = whyChanged(scene(), under);
@@ -137,7 +142,6 @@ describe('a hand-scripted tool sequence against a QuickJS-folded scene', () => {
     }
 
     // ── bisectFlip: the exact threshold of "2·spin ≤ 3", one VM per probe ──
-    // 12 probes = 2 endpoints + 10 halvings of [-2, 2]: bracket width ~4e-3
     const flip = await bisectFlip(log, fold, {
       param: spin,
       claim: under,
@@ -156,9 +160,8 @@ describe('a hand-scripted tool sequence against a QuickJS-folded scene', () => {
     }
 
     // ── every probe so far was a throwaway fold: the LIVE scene never moved ──
-    const untouched = sceneManifest(live.stage);
-    expect(untouched.objects.find((o) => o.id === spin)!.value).toBe(1);
-    expect(untouched.claims.find((cl) => cl.id === under)!.holds).toBe(true);
+    expect(numFromInspect(scene(), spin)).toBe(1);
+    expect(holdsFromInspect(scene(), under)).toBe(true);
 
     // ── setInput: the event path, committed via the disposable fold ──
     const set = await setInput(log, fold, { id: spin, value: -1 });
@@ -167,34 +170,31 @@ describe('a hand-scripted tool sequence against a QuickJS-folded scene', () => {
 
     // ── appendFragment: gate → commit; the fragment reaches back BY ID ──
     const FRAGMENT = [
-      `const spin = M.byId("${spin}");`,
-      'lesson.beat("Watch it settle");',
-      'lesson.show(View.readout(M.derived(() => spin.value, "spin now"), { label: "spin now" }));',
+      `const spin = byId("${spin}");`,
+      'readout(derive(() => spin.value, { label: "spin now" }), { label: "spin now" });',
     ].join('\n');
     const appended = await appendFragment(set.log, fold, compile, { source: FRAGMENT });
     expect(appended.result.ok ? 'ok' : JSON.stringify(appended.result.error)).toBe('ok');
     expect(appended.log).toHaveLength(3);
 
     // the whole conversation still folds from scratch, and the folded scene
-    // carries the write acts: spin at -1, the turn-2 beat on the timeline
+    // carries the write acts: spin at -1
     const replayed = await freshScene();
     const result = replayLog(appended.log, {
       execute: replayed.execute,
       resolve: (id) => sceneIndex(replayed.stage).get(id) as Settable | undefined,
     });
     expect(result.ok ? 'ok' : (result as { failure: { message: string } }).failure.message).toBe('ok');
-    const manifest = sceneManifest(replayed.stage);
-    expect(manifest.objects.find((o) => o.id === spin)!.value).toBe(-1);
-    expect(manifest.beats.map((b) => b.title)).toEqual(['An instrument', 'Watch it settle']);
+    expect(numFromInspect(sceneIndex(replayed.stage), spin)).toBe(-1);
 
     // and the live scene STILL has not moved — writes advance the log; the
     // screen is the caller's to refresh, exactly as on the manipulate path
-    expect(sceneManifest(live.stage).objects.find((o) => o.id === spin)!.value).toBe(1);
+    expect(numFromInspect(scene(), spin)).toBe(1);
   }, 30_000);
 
   it('the gate rejection comes back verbatim as the tool error', async () => {
     const log: ConversationLog = [{ kind: 'program', source: PROGRAM, js: PROGRAM }];
-    const BAD = 'lesson.beat("nope");\nconst x = eval("1");';
+    const BAD = 'const x = eval("1");';
     const w = await appendFragment(log, fold, compile, { source: BAD });
     expect(w.result.ok).toBe(false);
     if (!w.result.ok) {
