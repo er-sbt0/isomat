@@ -9,11 +9,16 @@
 #   ./run.sh test       # one vitest across all package projects (~2s — the loop)
 #   ./run.sh typecheck  # strict tsc --noEmit across packages, in parallel
 #   ./run.sh install    # install workspace dependencies
+#   ./run.sh dev        # Phase 2: the web app, Vite dev server on :5173
+#   ./run.sh build      # Phase 2: static production build of the web app
 #
-# The app / generation / browser-gate commands (dev, build, verify, record, …)
-# were removed in the Stabilize milestone (S5): they dispatched to `@isomat/web`
-# and `@isomat/planner`, which do not exist in this repo. The loop is the two
-# free tiers above.
+# S5 (Stabilize) removed the app commands because they dispatched to `@isomat/web`
+# and `@isomat/planner`, neither of which existed. `@isomat/web` exists again as of
+# Phase 2 / W0, so `dev` and `build` are back — and only those two. Generation and
+# the browser gate (verify, record, gate) stay deleted.
+#
+# The cheap tier is still the loop: `test` + `typecheck` prove everything, and the
+# web app is testable headless. `dev` is for looking at it, not for gating it.
 #
 set -euo pipefail
 
@@ -73,8 +78,16 @@ case "$cmd" in
   install)
     exec pnpm install
     ;;
+  dev)
+    # The client-only web app (Phase 2 decision #6). No server, no API key.
+    exec pnpm --filter @isomat/web dev "$@"
+    ;;
+  build)
+    # Static output in packages/web/dist — deployable to any static host.
+    exec pnpm --filter @isomat/web build "$@"
+    ;;
   *)
-    echo "usage: ./run.sh [test|typecheck|install]" >&2
+    echo "usage: ./run.sh [test|typecheck|install|dev|build]" >&2
     exit 2
     ;;
 esac

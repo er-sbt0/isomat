@@ -1,0 +1,183 @@
+/* styles.css — minimal, legible chrome. W1 brings the real view components. */
+
+:root {
+  --bg: #fbfaf8;
+  --fg: #1e1c1a;
+  --dim: #7a736c;
+  --line: #e3ded7;
+  --accent: #2f6f4f;
+  --user: #2f5f8f;
+  --copilot: #7a4f8f;
+  --fail: #a33;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16151a;
+    --fg: #eceaf0;
+    --dim: #9a95a3;
+    --line: #2e2b35;
+    --accent: #6fc79a;
+    --user: #7fb3e8;
+    --copilot: #c79ae8;
+    --fail: #e88;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+main {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 4rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.9rem;
+  letter-spacing: -0.02em;
+}
+
+h2 {
+  margin: 2.25rem 0 0.75rem;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--dim);
+  font-weight: 600;
+}
+
+.sub {
+  margin: 0.3rem 0 0;
+  color: var(--dim);
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.88em;
+}
+
+/* ── the log ── */
+
+ol.log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+ol.log li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid var(--line);
+}
+
+ol.log li:last-child {
+  border-bottom: none;
+}
+
+.by {
+  flex: none;
+  width: 4.4rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.by-user {
+  color: var(--user);
+}
+
+.by-copilot {
+  color: var(--copilot);
+}
+
+.kind {
+  flex: none;
+  width: 5.5rem;
+  color: var(--dim);
+  font-size: 0.82rem;
+}
+
+ol.log code {
+  color: var(--fg);
+  opacity: 0.85;
+  overflow-wrap: anywhere;
+}
+
+/* ── the fold result ── */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.5rem 0.8rem;
+  border-bottom: 1px solid var(--line);
+}
+
+th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--dim);
+  font-weight: 600;
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.dim {
+  color: var(--dim);
+}
+
+.ok {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.failed {
+  color: var(--fail);
+  font-weight: 600;
+}
+
+.pending {
+  color: var(--dim);
+  font-style: italic;
+}
+
+.note {
+  margin-top: 1rem;
+  padding: 0.75rem 0.9rem;
+  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  border-radius: 0 6px 6px 0;
+  color: var(--dim);
+  font-size: 0.9rem;
+}
+
+.note code {
+  color: var(--fg);
+}

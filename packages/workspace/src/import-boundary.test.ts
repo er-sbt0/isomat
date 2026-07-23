@@ -65,11 +65,19 @@ const PLAYBACK = [
 ];
 
 /** The whole package set — the main path plus the quarantine. */
-const ALL_PACKAGES = ['core', 'substrate', 'sandbox', 'objects', 'workspace', 'copilot', 'parse', 'cell'];
+const ALL_PACKAGES = ['core', 'substrate', 'sandbox', 'objects', 'workspace', 'copilot', 'parse', 'web', 'cell'];
 /** The main path: everything the product ships. `cell` is NOT here. */
-const MAIN_PATH = ['core', 'substrate', 'sandbox', 'objects', 'workspace', 'copilot', 'parse'];
+const MAIN_PATH = ['core', 'substrate', 'sandbox', 'objects', 'workspace', 'copilot', 'parse', 'web'];
 /** The workspace-facing path: the main path minus `core` (which owns timeline). */
-const WORKSPACE_FACING = ['substrate', 'sandbox', 'objects', 'workspace', 'copilot', 'parse'];
+const WORKSPACE_FACING = ['substrate', 'sandbox', 'objects', 'workspace', 'copilot', 'parse', 'web'];
+
+/**
+ * The Node-only wasm loaders (Phase 2). `@isomat/web` is a client-only bundle by
+ * decision #6 — reaching either of these would pull the Node loader into the
+ * browser build, which fails at bundle time if you are lucky and at runtime if
+ * you are not. The `./browser` subpaths are the supported doors.
+ */
+const NODE_LOADERS = ['@isomat/sandbox/node', '@isomat/workspace/node', 'quickjs-emscripten'];
 
 function sourceFiles(pkgSrc: string): string[] {
   const out: string[] = [];
@@ -80,8 +88,9 @@ function sourceFiles(pkgSrc: string): string[] {
         walk(full);
         continue;
       }
-      if (!name.endsWith('.ts')) continue;
-      if (name.endsWith('.test.ts')) continue;
+      // `.tsx` too, or `@isomat/web`'s components would sit outside the fence.
+      if (!name.endsWith('.ts') && !name.endsWith('.tsx')) continue;
+      if (name.endsWith('.test.ts') || name.endsWith('.test.tsx')) continue;
       if (name.endsWith('.d.ts')) continue;
       out.push(full);
     }
@@ -135,5 +144,19 @@ describe('import boundary — the Stabilize fence', () => {
   it('NO package source imports any shed discipline (automata / graph / probability / calculus / linalg / field / structure / interaction)', () => {
     const all = ALL_PACKAGES.flatMap((pkg) => offences(`packages/${pkg}/src`, DISCIPLINES));
     expect(all).toEqual([]);
+  });
+
+  it('the web app never imports a Node wasm loader (client-only, decision #6)', () => {
+    const problems: string[] = [];
+    for (const file of sourceFiles(join(ROOT, 'packages/web/src'))) {
+      for (const spec of importSpecifiers(file)) {
+        // Exact or subpath match — `@isomat/sandbox/node` must fail while
+        // `@isomat/sandbox/browser` and `@isomat/sandbox` pass.
+        if (NODE_LOADERS.some((bad) => spec === bad || spec.startsWith(`${bad}/`))) {
+          problems.push(`${file.slice(ROOT.length + 1)} imports "${spec}"`);
+        }
+      }
+    }
+    expect(problems).toEqual([]);
   });
 });
