@@ -65,11 +65,11 @@ const PLAYBACK = [
 ];
 
 /** The whole package set — the main path plus the quarantine. */
-const ALL_PACKAGES = ['core', 'substrate', 'sandbox', 'objects', 'workspace', 'cell'];
+const ALL_PACKAGES = ['core', 'substrate', 'sandbox', 'objects', 'workspace', 'copilot', 'cell'];
 /** The main path: everything the product ships. `cell` is NOT here. */
-const MAIN_PATH = ['core', 'substrate', 'sandbox', 'objects', 'workspace'];
+const MAIN_PATH = ['core', 'substrate', 'sandbox', 'objects', 'workspace', 'copilot'];
 /** The workspace-facing path: the main path minus `core` (which owns timeline). */
-const WORKSPACE_FACING = ['substrate', 'sandbox', 'objects', 'workspace'];
+const WORKSPACE_FACING = ['substrate', 'sandbox', 'objects', 'workspace', 'copilot'];
 
 function sourceFiles(pkgSrc: string): string[] {
   const out: string[] = [];

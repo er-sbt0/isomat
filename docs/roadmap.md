@@ -136,11 +136,51 @@ Carried into M2:
 
 ### M2 — 4c loop, live and headless
 `packages/copilot`. Light up what math-ai built but never wired.
-- Lift `runToolLoop`, tool-defs, the intent classifier, and the loop cassette from `planner`.
-- Adapt `ToolExecutor` to run against `Workspace` + `fold` (replacing conversation replay).
-- A headless turn fn: `(log, question) → { answer | manipulated | newLog }`.
-- **Exit:** classifier fast-path manipulates a param with **zero** model calls; a cassette-driven agentic turn probes (`evalAt`/`counterfactual`) then answers with evidence-typing, replayed free; `appendFragment` commits through `commitEntry`.
-- **Proves:** the executor ↔ workspace seam — where "4c dark → live" is actually paid.
+
+**Discovery correction (2026-07-23):** the original plan's "lift `runToolLoop`,
+tool-defs, the intent classifier, and the loop cassette from `planner`" is stale —
+`planner` was never lifted in M0, and there is **zero model-client code in the repo**
+(no `runToolLoop`, classifier, or cassette harness anywhere). What survived is the
+**tool executor** (`tools.ts`) alone, parked in `sandbox` and already proven headless
+against a QuickJS fold — but speaking the superseded `ConversationLog`. So M2 is
+**build-the-loop-fresh around a proven executor**, and splits cleanly:
+
+#### M2a — the executor ↔ workspace seam ✅ DONE (2026-07-23)
+- New `packages/copilot` (`@isomat/copilot`; deps core/objects/sandbox/workspace).
+- Retargeted the executor from `ConversationLog`/`commitEntry`/`ReplayFailure` →
+  `WorkspaceLog`/`commit`/`FoldFailure`. The disposable-fold hook IS workspace's
+  `TryFold`, so `commit` takes it directly (the old `asTryFold` shim is gone); a
+  committed write lands a real authorship-tagged `SetInputAct`/`AuthorAct`.
+- **Deviation from the original plan** (which said "lift both `tools.ts` +
+  `conversation.ts`"): `conversation.ts` was **deleted, not lifted** — `workspace`
+  supersedes it (its `replayLog`/`commitEntry`/`coalesce` live on as `foldLog`/
+  `commit`/`coalesce`), and once the executor stopped importing it, it was dead. Its
+  self-test went too (coverage is in `workspace`'s fold/commit tests).
+- Shed the discipline-era `inspect`/`evalAt` arms (matrix/loop/segment/distribution/
+  field kinds) — they can't be constructed by the flat native surface; `evalAt` is
+  `fn`-only until M3/M5 grow the substrate to express more.
+- Extended the Stabilize fence to cover `copilot` (main-path + workspace-facing).
+- **Exit (met):** the full tool sequence — inspect → evalAt → whyChanged →
+  counterfactual → bisectFlip → setInput → appendFragment — green against a real
+  QuickJS-folded `Workspace` (`tools.workspace.test.ts`), plus the rules tier
+  (`tools.test.ts`) over an in-process `foldLog`; `appendFragment` commits through
+  `commit`; the live workspace never moves under a probe. **typecheck 7/7, 332 tests.**
+
+#### M2b — the loop driver + classifier (next)
+- A headless turn fn: `(log, question, client) → { answer | manipulated | newLog }`,
+  a `ModelClient` seam, and an intent-classifier fast-path.
+- **Open decision (paused):** the canned tool-call sequence that drives the agentic
+  turn — hand-authored **scripted fake client** (free, deterministic) vs a **billed
+  real-Claude cassette** (recorded once, replayed free). Both prove the seam; the
+  billed one additionally proves a real model *chooses* these tools. Leaning
+  scripted-fake for M2b, deferring the billed cassette to M5's flagship session.
+- **Exit:** classifier fast-path manipulates a param with **zero** model calls; a
+  canned agentic turn probes (`evalAt`/`counterfactual`) then answers with
+  evidence-typing, replayed free.
+- **Proves:** the loop ↔ executor seam.
+
+**Proves (M2 overall):** the executor ↔ workspace seam — where "4c dark → live" is
+actually paid (M2a) — then the loop around it (M2b).
 
 ### M3 — Parser front door + introduce/edit
 `packages/parse`. The riskiest new seam.

@@ -26,45 +26,5 @@ export { GUEST_PRELUDE } from './prelude.js';
 export { GuestError } from './protocol.js';
 export type { WireNode, HostCall } from './protocol.js';
 export { describeGuestError } from './guest-error.js';
-export { replayLog, commitEntry, foldSource, studentEvents, coalesce } from './conversation.js';
 export { isolate } from './scope.js';
-export type {
-  ConversationLog,
-  LogEntry,
-  ProgramEntry,
-  FragmentEntry,
-  EventEntry,
-  StudentEvent,
-  SetInputEvent,
-  ReplayHooks,
-  ReplayResult,
-  ReplayFailure,
-  CommitResult,
-  Settable,
-} from './conversation.js';
 export type { GuestSite, GuestErrorDetail } from './guest-error.js';
-export {
-  runTool,
-  inspect,
-  evalAt,
-  whyChanged,
-  counterfactual,
-  bisectFlip,
-  appendFragment,
-  setInput,
-} from './tools.js';
-export type {
-  ToolCall,
-  ToolResult,
-  ToolError,
-  ToolErrorCode,
-  ToolHooks,
-  ToolOutcome,
-  SceneMap,
-  SetSpec,
-  FoldScene,
-  FoldOutcome,
-  CompileFragment,
-  WhyChangedEntry,
-  Json,
-} from './tools.js';

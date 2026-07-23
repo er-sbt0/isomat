@@ -22,9 +22,8 @@ key, no billed path exists in the repo today.
 
 ## The package DAG — acyclic, depth 3
 ```
-core → substrate / sandbox / objects → workspace        ← the product path
+core → substrate / sandbox / objects → workspace → copilot    ← the product path
 cell/    ← ALL demoted playback, OFF the main DAG (nothing on the path imports it)
-copilot/ ← future (M2); does not exist yet
 ```
 - **core** — identity/stable-ids, reactive graph (`Slot`/`Derived`/`Collection`/
   `Incremental`), correspondence graph, world, provenance. `timeline.ts` lives here
@@ -33,12 +32,17 @@ copilot/ ← future (M2); does not exist yet
 - **substrate** — shared leaf types (`Live`, `NumericHandle`, `VarySettable`,
   `Verdict`, `Polarity`).
 - **sandbox** (was `host`) — QuickJS bridge/prelude/budget/lint/guest-error. Builds
-  on `core` alone. **`tools.ts` + `conversation.ts` are parked here** — the 4c tool
-  executor + the old conversation log; M2 lifts them into `copilot/`.
+  on `core` alone. (The parked `tools.ts` + `conversation.ts` are **gone** as of
+  M2a: the executor moved to `copilot/` retargeted onto `workspace`; `conversation.ts`
+  was superseded by `workspace` and deleted.)
 - **objects** (was `library` + the kept `render` views) — the native primitives,
   their views, `formula`/`expr`, and the timeline-free `scene.ts`.
 - **workspace** — the pivot: the `WorkspaceAct` log, `fold(log) → Workspace`, and
   the one-transaction `commit`. The keeper this whole project is built around.
+- **copilot** (M2) — the workspace as an instrument: the 4c tool executor
+  (`inspect`/`evalAt`/`whyChanged`/`counterfactual`/`bisectFlip`/`setInput`/
+  `appendFragment`/`runTool`) retargeted onto `WorkspaceLog`/`commit`. **M2a done**;
+  the loop driver + classifier + `ModelClient` seam is M2b (next).
 - **cell/** (quarantine) — lesson verbs, morph, player/segments/events, prose
   manifest, playback-only views. Kept building + tested, but **off the DAG**.
 
@@ -59,20 +63,25 @@ lesson engine. If you find yourself wanting something from `cell/`, that's a sig
 to reconsider, not to relax the fence.
 
 ## Status (2026-07-23)
-**M0** (substrate lift), **M1** (`workspace` fold), and the **Stabilize** milestone
-(decouple from math-ai's lesson concepts — shed all discipline libs, flat native
-vocab, quarantine playback) are all **DONE and committed**. Green: typecheck 6/6,
-343 tests. Working tree clean.
+**M0** (substrate lift), **M1** (`workspace` fold), **Stabilize** (decouple from
+math-ai's lesson concepts — shed all discipline libs, flat native vocab, quarantine
+playback), and **M2a** (the copilot tool executor ↔ workspace seam) are all **DONE
+and committed**. Green: typecheck 7/7, **332 tests**. Working tree clean.
+(The 343→332 delta is the deleted, superseded `conversation.ts` self-test — its
+verbs live on as `workspace`'s `foldLog`/`commit`/`coalesce`, already tested.)
 
 ## The plan
 - `docs/roadmap.md` — the living plan. **Read it first.** Milestones M0/M1/Stabilize
   are marked done; M2–M5 + Phase 2 (UI) are ahead.
 - `docs/stabilize-plan.md` — the executed file-level Stabilize demolition plan.
 
-**NEXT: M2** — wire the built-but-dark **4c agentic loop** live in a new `copilot/`
-package: lift `tools.ts`/`conversation.ts` out of `sandbox`, run the executor
-against `fold`/`Workspace`. Not started. It needs a go-ahead and a model-access call
-(billed cassette vs a scripted fake client — see roadmap M2 discussion).
+**NEXT: M2b** — the loop driver around the M2a executor: a headless turn fn
+`(log, question, client) → { answer | manipulated | newLog }`, an intent-classifier
+fast-path (manipulate a param with zero model calls), and a `ModelClient` seam. Needs
+the paused model-access call: **scripted fake client** (free, leaning this way) vs a
+**billed real-Claude cassette** (deferred to M5). Discovery finding logged in roadmap
+M2: the original "lift the loop from `planner`" was stale — planner was never lifted;
+M2 is build-fresh around the executor, not a lift.
 
 ## Locked decisions
 - **No CAS.** The LLM reasons (fallibly); the engine makes math manipulable/visible/

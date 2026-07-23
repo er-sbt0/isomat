@@ -1,22 +1,18 @@
 /**
- * tools.test.ts — the tool layer, with no sandbox in the way.
+ * tools.test.ts — the tool layer, with no sandbox in the way (roadmap M2a).
  *
- * PARKED at the workspace level (Stabilize §3.2/§3.3): `tools.ts` is the 4c tool
- * executor destined for a future `copilot` package (roadmap M2). It stays
- * core-only in `@isomat/sandbox`, but its tests couple to `render`/`library`, so
- * they live here — the package that already owns those deps — rather than
- * forcing them back into a host that now stands on `core` alone. M2 lifts both
- * `tools.ts` and these tests into the copilot seam. S3 re-authored the scene
- * from the discipline vocabulary the shed removed: the matrix / loop /
- * vector-field arms of `inspect` / `evalAt` went with their objects; what
- * survives is the causal/experiment core over a param / scalar / claim / plotted
- * fn.
+ * The rules tier: dispatch, the boundary, typed errors, and the disposable-fold
+ * probes, exercised over a scene built IN-PROCESS (a real world, stage and
+ * native scope, driven by direct library calls instead of QuickJS). The sibling
+ * `tools.workspace.test.ts` proves the same tools against a scene a real guest
+ * program folds through `@isomat/workspace/node`; this proves the logic where it
+ * is cheap.
  *
- * The scene is built IN-PROCESS: a real world, stage and native scope, driven
- * by direct library calls instead of QuickJS. That is the same split
- * conversation.test.ts made — the sibling `.sandbox.test.ts` proves the tools
- * against a scene a real guest program folded; this proves the rules
- * (dispatch, boundary, typed errors) where they are cheap to exercise.
+ * M2a retarget: the fold is `@isomat/workspace`'s own `foldLog` (not the
+ * superseded `replayLog`), the log is a `WorkspaceLog` of `author` acts, and a
+ * committed write lands a real `SetInputAct` / `AuthorAct`. The thunk registry
+ * stands in for QuickJS execution — a source string keys the closure an `author`
+ * act "runs" — exactly the seam the sandbox test backs with a real VM.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -24,16 +20,25 @@ import { createWorld } from '@isomat/core';
 import { createStage, sceneIndex } from '@isomat/objects';
 import { createNativeScope } from '@isomat/objects';
 import type { NativeScope } from '@isomat/objects';
-import { appendFragment, bisectFlip, counterfactual, evalAt, inspect, runTool, setInput, whyChanged } from '@isomat/sandbox';
-import type { CompileFragment, FoldScene } from '@isomat/sandbox';
-import { replayLog } from '@isomat/sandbox';
-import type { ConversationLog, Settable } from '@isomat/sandbox';
+import { foldLog } from '@isomat/workspace';
+import type { ExecutableAct, TryFold, WorkspaceLog } from '@isomat/workspace';
+import {
+  appendFragment,
+  bisectFlip,
+  counterfactual,
+  evalAt,
+  inspect,
+  runTool,
+  setInput,
+  whyChanged,
+} from '@isomat/copilot';
+import type { CompileFragment } from '@isomat/copilot';
 
 /**
- * One scene with something for every dispatch arm: a draggable parameter, a
- * derived scalar, a two-sided claim, a vector field, a fn, a 2×2 matrix, a
- * region whose boundary is a loop — all MENTIONED, because the boundary rule
- * says a tool reaches what the manifest offers and nothing else.
+ * One scene with something for every surviving dispatch arm: a draggable
+ * parameter, a derived scalar, a two-sided claim, and a plotted fn — all
+ * MENTIONED, because the boundary rule says a tool reaches what the manifest
+ * offers and nothing else.
  */
 function build(scope: NativeScope) {
   const spin = scope.param('spin', 1, { range: [-2, 2] });
@@ -53,36 +58,35 @@ function scene() {
   const refs = build(scope);
 
   // the hook contract: the scene map IS sceneIndex, built per probe so it
-  // describes the scene as it stands, not as it stood when the test began
+  // describes the workspace as it stands, not as it stood when the test began
   const index = () => sceneIndex(stage);
 
-  // the live scene is fold(log) too: one program entry, standing for build()
-  const log: ConversationLog = [{ kind: 'program', source: 'build', js: 'build' }];
+  // the live workspace is fold(log) too: one author act, standing for build()
+  const log: WorkspaceLog = [{ kind: 'author', js: 'build', source: 'build', by: 'user', turn: 0 }];
 
-  // An in-process fold: fresh world, replay the CANDIDATE, hand back its
-  // index. Determinism means the folded ids line up with the live scene's.
-  // Program/fragment sources are interpreted through THUNKS — the same
-  // stand-in for QuickJS execution the conversation unit tests use; the
-  // sibling .sandbox.test.ts runs real guest code through the same seam.
+  // An in-process fold: fresh world, replay the CANDIDATE through foldLog, hand
+  // back the Workspace. Determinism means the folded ids line up with the live
+  // scene's. `author` sources are interpreted through THUNKS — the stand-in for
+  // QuickJS execution; the sibling .workspace.test.ts runs real guest code.
   const thunks: Record<string, (sc: NativeScope) => void> = {
     build,
     noteBeat: (sc) => {
       sc.note`a note`;
     },
   };
-  const fold: FoldScene = (candidate) => {
+  const fold: TryFold = (candidate) => {
     const w = createWorld();
     const st = createStage(w);
     const sc = createNativeScope(w, st);
-    const result = replayLog(candidate, {
-      execute: (entry) => {
-        const run = thunks[entry.source];
-        if (!run) throw new Error(`no thunk for source "${entry.source}"`);
+    return foldLog(candidate, {
+      execute: (act: ExecutableAct) => {
+        const run = thunks[act.source ?? ''];
+        if (!run) throw new Error(`no thunk for source "${act.source}"`);
         run(sc);
       },
-      resolve: (id) => sceneIndex(st).get(id) as Settable | undefined,
+      scene: () => sceneIndex(st),
+      graph: () => w.graph,
     });
-    return result.ok ? { ok: true, scene: sceneIndex(st) } : result;
   };
 
   return { stage, scope, index, log, fold, ...refs };
@@ -142,7 +146,6 @@ describe('inspect — the full structured value of one object', () => {
       expect(r.error.message).toContain('manifest');
     }
   });
-
 });
 
 describe('evalAt — sample a rule the object already carries', () => {
@@ -281,7 +284,7 @@ describe('whyChanged — causality read off the reactive graph', () => {
   });
 });
 
-describe('counterfactual — a disposable fold, not the live scene', () => {
+describe('counterfactual — a disposable fold, not the live workspace', () => {
   it('answers "what if spin were 2" and leaves the screen untouched', async () => {
     const s = scene();
     const r = await counterfactual(s.log, s.fold, {
@@ -299,7 +302,7 @@ describe('counterfactual — a disposable fold, not the live scene', () => {
     expect(s.under.holds).toBe(true);
   });
 
-  it('a set on an id the scene does not offer is the fold\'s rejection, verbatim', async () => {
+  it("a set on an id the workspace does not offer is the fold's rejection, verbatim", async () => {
     const s = scene();
     const r = await counterfactual(s.log, s.fold, {
       set: [{ id: 'parameter#999', value: 2 }],
@@ -355,8 +358,8 @@ describe('bisectFlip — the exact threshold, one disposable fold per probe', ()
     expect(v.flipped).toBe(true);
     expect(v.holdsAtLo).toBe(true);
     expect(v.holdsAtHi).toBe(false);
-    // The bracket pins the analytically known flip point — which, precisely,
-    // is 1.5 + tol/2: the claim's `<=` carries its default 1e-9 float-hygiene
+    // The bracket pins the analytically known flip point — which, precisely, is
+    // 1.5 + tol/2: the claim's `<=` carries its default 1e-9 float-hygiene
     // tolerance, and the bisection is exact enough to resolve THAT.
     expect(v.lo).toBeLessThanOrEqual(1.5 + 1e-9);
     expect(v.hi).toBeGreaterThanOrEqual(1.5);
@@ -422,20 +425,23 @@ describe('bisectFlip — the exact threshold, one disposable fold per probe', ()
 });
 
 describe('setInput — the event path as a tool', () => {
-  it('commits via commitEntry and hands back the advanced log; the screen is the caller\'s', async () => {
+  it("commits via commit and hands back the advanced log; the screen is the caller's", async () => {
     const s = scene();
     const w = await setInput(s.log, s.fold, { id: s.spin.id, value: -1 });
     expect(w.result.ok).toBe(true);
     expect(w.log).toHaveLength(2);
     expect(w.log[1]).toEqual({
-      kind: 'event',
-      event: { type: 'set-input', target: s.spin.id, value: -1 },
+      kind: 'set-input',
+      target: s.spin.id,
+      value: -1,
+      by: 'copilot',
+      turn: 0,
     });
     // the committed log FOLDS to the new value…
     const folded = await s.fold(w.log);
     expect(folded.ok).toBe(true);
     if (folded.ok) {
-      const r = inspect(folded.scene, s.spin.id);
+      const r = inspect(folded.workspace.objects, s.spin.id);
       expect(r.ok && (r.value as { value: number }).value).toBe(-1);
     }
     // …while the live stage stays whatever it was: reflecting an accepted log
@@ -443,7 +449,14 @@ describe('setInput — the event path as a tool', () => {
     expect(s.spin.value).toBe(1);
   });
 
-  it('an id the scene does not offer is rejected, and the log is untouched', async () => {
+  it('the write can be authorship-tagged for the loop that drives it', async () => {
+    const s = scene();
+    const w = await setInput(s.log, s.fold, { id: s.spin.id, value: 0 }, { by: 'user', turn: 3 });
+    expect(w.result.ok).toBe(true);
+    expect(w.log[1]).toMatchObject({ by: 'user', turn: 3 });
+  });
+
+  it('an id the workspace does not offer is rejected, and the log is untouched', async () => {
     const s = scene();
     const w = await setInput(s.log, s.fold, { id: 'parameter#999', value: 0 });
     expect(w.result.ok).toBe(false);
@@ -454,7 +467,7 @@ describe('setInput — the event path as a tool', () => {
     expect(w.log).toBe(s.log);
   });
 
-  it('a target that is not settable is the fold\'s complaint, verbatim', async () => {
+  it("a target that is not settable is the fold's complaint, verbatim", async () => {
     const s = scene();
     const w = await setInput(s.log, s.fold, { id: s.under.id, value: 0 });
     expect(w.result.ok).toBe(false);
@@ -462,19 +475,19 @@ describe('setInput — the event path as a tool', () => {
   });
 });
 
-describe('appendFragment — the 4b pipeline as a tool', () => {
+describe('appendFragment — the author path as a tool', () => {
   /** A gate that rejects on a marker: the unit-tier stand-in for lint. */
   const compile: CompileFragment = (source) =>
     source.includes('FORBIDDEN')
       ? { ok: false, errors: ['banned-global: FORBIDDEN is a sandbox-escape'] }
       : { ok: true, js: source };
 
-  it('gates, commits, and the accepted log carries the fragment', async () => {
+  it('gates, commits, and the accepted log carries the author act', async () => {
     const s = scene();
     const w = await appendFragment(s.log, s.fold, compile, { source: 'noteBeat' });
     expect(w.result.ok).toBe(true);
     expect(w.log).toHaveLength(2);
-    expect(w.log[1]).toMatchObject({ kind: 'fragment', source: 'noteBeat' });
+    expect(w.log[1]).toMatchObject({ kind: 'author', source: 'noteBeat', by: 'copilot', turn: 0 });
     expect((await s.fold(w.log)).ok).toBe(true);
   });
 

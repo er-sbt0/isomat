@@ -40,6 +40,31 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)
 
+  packages/copilot:
+    dependencies:
+      '@isomat/core':
+        specifier: workspace:*
+        version: link:../core
+      '@isomat/objects':
+        specifier: workspace:*
+        version: link:../objects
+      '@isomat/sandbox':
+        specifier: workspace:*
+        version: link:../sandbox
+      '@isomat/workspace':
+        specifier: workspace:*
+        version: link:../workspace
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
   packages/core:
     devDependencies:
       '@types/node':
