@@ -86,6 +86,12 @@ export interface IntroduceAct extends Tagged {
   readonly at: Position;
   /** The explicit stable id the source mints for the new object. */
   readonly id: Id;
+  /**
+   * The parse context, present iff this act came from `introduceExpr` (M3). It
+   * is what M4's `edit-span` re-parses and re-emits from; a hand-authored
+   * `introduce` omits it and so cannot be edit-spanned (see `ExprMeta`).
+   */
+  readonly expr?: ExprMeta;
 }
 
 /**
@@ -124,13 +130,86 @@ export interface RetireAct extends Tagged {
   readonly target: Id;
 }
 
-export type WorkspaceAct = AuthorAct | IntroduceAct | SetInputAct | MoveAct | RetireAct;
+/**
+ * The parse context an `introduceExpr` (M3, `@isomat/parse`) stamps on its act
+ * so a later `edit-span` (M4) can re-emit the object from edited source. It is
+ * PLAIN DATA — deliberately no `@isomat/parse` type, because `workspace` sits
+ * UPSTREAM of `parse` on the DAG — carrying exactly the inputs `introduceExpr`
+ * consumed, so re-running the emit against a spliced `text` reproduces the object
+ * under the SAME `id`/`at`/`bindings`. Absent on a hand-authored `introduce`
+ * (its `js` is not re-parseable), which therefore cannot be edit-spanned.
+ */
+export interface ExprMeta {
+  /** The expression SOURCE (mathjs syntax, not display TeX) the emit parsed. */
+  readonly text: string;
+  readonly at: Position;
+  readonly id: Id;
+  readonly domain: readonly [number, number];
+  readonly indepVar: string;
+  readonly bindings: Readonly<Record<string, Id>>;
+  readonly label?: string;
+}
+
+/**
+ * Re-mint an object's source under its EXISTING id (M4) — the id-stability core.
+ *
+ * `replace` does NOT append a second declaration of `target`: a second mint of
+ * the same explicit id collides with the single-assignment id registry
+ * (`core/identity.ts`, by design). Instead the fold's resolve pass folds this
+ * act's `js` in at `target`'s ORIGINAL defining position (fold.ts, "Option B —
+ * fold-time substitution"), so `target` is minted exactly ONCE — with this js —
+ * and every dependent (all necessarily authored after it) recomputes against the
+ * new definition. The `js` MUST re-register `target` under its own id; a target
+ * no earlier `introduce` defined, or a `js` that mints no such id, is a FAILURE.
+ * `target` must be an object minted by an `introduce` act (the acts that carry a
+ * statically-known defining id).
+ */
+export interface ReplaceAct extends Tagged {
+  readonly kind: 'replace';
+  readonly target: Id;
+  readonly js: string;
+  readonly source?: string;
+}
+
+/**
+ * Edit ONE addressable span of a parsed expression (M4). A span is a top-level
+ * additive term, role-named `term0`/`term1`/… exactly as `@isomat/parse`'s
+ * `toFragments` splits it. `text` is the replacement in the SAME syntax
+ * `parseExpr` consumes — mathjs SOURCE, not display TeX — hence `text`, not
+ * `tex`. Like `replace`, this appends no declaration: the fold's resolve pass
+ * splices `text` into the addressed term's source, re-parses the whole
+ * expression, and folds the re-emitted js in at the target's original defining
+ * position (id unchanged). Successive edit-spans on one target COMPOSE (each
+ * edits the target's current resolved source). The target must be an `introduce`
+ * carrying parse metadata (`introduceExpr`); a hand-authored or already-`replace`d
+ * object has no re-parseable source and is a FAILURE.
+ */
+export interface EditSpanAct extends Tagged {
+  readonly kind: 'edit-span';
+  readonly target: Id;
+  readonly role: string;
+  readonly text: string;
+}
+
+export type WorkspaceAct =
+  | AuthorAct
+  | IntroduceAct
+  | SetInputAct
+  | MoveAct
+  | RetireAct
+  | ReplaceAct
+  | EditSpanAct;
 
 export type WorkspaceLog = readonly WorkspaceAct[];
 
-/** The acts that fold by running source in the sandbox (as opposed to setting a value). */
-export type ExecutableAct = AuthorAct | IntroduceAct;
+/**
+ * The acts that carry runnable `.js` the sandbox executes (as opposed to setting
+ * a value or a pure projection). `replace` joins because it carries a `js` the
+ * fold runs at its target's defining position; `edit-span` does NOT — it has no
+ * `js`, the fold re-emits one from its `text` through `@isomat/parse`.
+ */
+export type ExecutableAct = AuthorAct | IntroduceAct | ReplaceAct;
 
 export function isExecutable(act: WorkspaceAct): act is ExecutableAct {
-  return act.kind === 'author' || act.kind === 'introduce';
+  return act.kind === 'author' || act.kind === 'introduce' || act.kind === 'replace';
 }

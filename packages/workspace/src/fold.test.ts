@@ -176,6 +176,108 @@ describe('foldLog — the spatial verbs move / retire (M4 Stage A)', () => {
   });
 });
 
+describe('foldLog — replace / edit-span resolve in place (M4 Stage B)', () => {
+  const introMeta = {
+    kind: 'introduce' as const,
+    by: 'user' as const,
+    turn: 1,
+    id: 'c@1',
+    at,
+    js: 'ORIG',
+    expr: {
+      text: 'x^2',
+      at,
+      id: 'c@1',
+      domain: [-2, 2] as const,
+      indepVar: 'x',
+      bindings: {},
+    },
+  };
+
+  it('a replace supersedes the target: its js runs at the introduce position, once', () => {
+    const s = stub();
+    const out = foldLog(
+      [intro('a@1'), { kind: 'replace', by: 'copilot', turn: 2, target: 'a@1', js: 'REPLACED' }],
+      s.hooks,
+    );
+    expect(out.ok).toBe(true);
+    if (out.ok) expect(out.workspace.objects.has('a@1')).toBe(true); // id unchanged
+    // the introduce executed the FINAL resolved js, not intro()'s empty js…
+    const introCall = s.calls.find((c) => c.kind === 'introduce') as { js: string } | undefined;
+    expect(introCall?.js).toBe('REPLACED');
+    // …and the replace act itself never reached execute (no second mint)
+    expect(s.calls.some((c) => c.kind === 'replace')).toBe(false);
+    expect(s.calls.filter((c) => c.kind === 'introduce')).toHaveLength(1);
+  });
+
+  it('the last replace wins when a target is replaced twice (determinism)', () => {
+    const s = stub();
+    const out = foldLog(
+      [
+        intro('a@1'),
+        { kind: 'replace', by: 'user', turn: 2, target: 'a@1', js: 'FIRST' },
+        { kind: 'replace', by: 'user', turn: 3, target: 'a@1', js: 'SECOND' },
+      ],
+      s.hooks,
+    );
+    expect(out.ok).toBe(true);
+    const introCall = s.calls.find((c) => c.kind === 'introduce') as { js: string } | undefined;
+    expect(introCall?.js).toBe('SECOND');
+  });
+
+  it('a replace on an id no earlier introduce defined is a FAILURE naming the act', () => {
+    const s = stub();
+    const out = foldLog(
+      [intro('a@1'), { kind: 'replace', by: 'user', turn: 2, target: 'ghost@9', js: 'X' }],
+      s.hooks,
+    );
+    expect(out.ok).toBe(false);
+    if (!out.ok) {
+      expect(out.failure).toMatchObject({ index: 1, kind: 'replace' });
+      expect(out.failure.message).toContain('ghost@9');
+    }
+  });
+
+  it('an edit-span calls the injected resolver and folds its emitted js in at the defining position', () => {
+    const s = stub();
+    const resolveSpan = vi.fn(() => ({ js: 'EMITTED', source: 'x^3', meta: { ...introMeta.expr, text: 'x^3' } }));
+    const out = foldLog(
+      [introMeta, { kind: 'edit-span', by: 'copilot', turn: 2, target: 'c@1', role: 'term0', text: 'x^3' }],
+      { ...s.hooks, resolveSpan },
+    );
+    expect(out.ok ? 'ok' : out.failure.message).toBe('ok');
+    expect(resolveSpan).toHaveBeenCalledWith(introMeta.expr, 'term0', 'x^3');
+    const introCall = s.calls.find((c) => c.kind === 'introduce') as { js: string } | undefined;
+    expect(introCall?.js).toBe('EMITTED');
+  });
+
+  it('an edit-span with no resolver in the hooks is a FAILURE (parse-enabled fold required)', () => {
+    const s = stub();
+    const out = foldLog(
+      [introMeta, { kind: 'edit-span', by: 'user', turn: 2, target: 'c@1', role: 'term0', text: 'x^3' }],
+      s.hooks,
+    );
+    expect(out.ok).toBe(false);
+    if (!out.ok) {
+      expect(out.failure).toMatchObject({ index: 1, kind: 'edit-span' });
+      expect(out.failure.message).toContain('resolver');
+    }
+  });
+
+  it('an edit-span on an object with no parse metadata is a FAILURE', () => {
+    const s = stub();
+    const resolveSpan = vi.fn(() => ({ js: 'EMITTED', source: 'x', meta: introMeta.expr }));
+    const out = foldLog(
+      // intro('a@1') carries no `expr` metadata (hand-authored)
+      [intro('a@1'), { kind: 'edit-span', by: 'user', turn: 2, target: 'a@1', role: 'term0', text: 'x' }],
+      { ...s.hooks, resolveSpan },
+    );
+    expect(out.ok).toBe(false);
+    if (!out.ok) expect(out.failure).toMatchObject({ index: 1, kind: 'edit-span' });
+    expect(resolveSpan).not.toHaveBeenCalled();
+  });
+});
+
 describe('commit — the one-transaction rule', () => {
   it('a rejected candidate returns the PRIOR log, untouched (referentially)', async () => {
     const log: WorkspaceLog = [intro('a@1')];
@@ -238,9 +340,12 @@ describe('SessionIds — the stable-id allocator', () => {
 });
 
 describe('isExecutable', () => {
-  it('is true for author/introduce, false for set-input', () => {
+  it('is true for author/introduce/replace (they carry runnable js), false otherwise', () => {
     expect(isExecutable(intro('a@1'))).toBe(true);
     expect(isExecutable({ kind: 'author', by: 'user', turn: 1, js: '' })).toBe(true);
+    expect(isExecutable({ kind: 'replace', by: 'user', turn: 1, target: 'a@1', js: '' })).toBe(true);
     expect(isExecutable({ kind: 'set-input', by: 'user', turn: 1, target: 'a@1', value: 0 })).toBe(false);
+    // edit-span has no js — it is re-emitted through @isomat/parse, not executed as-is
+    expect(isExecutable({ kind: 'edit-span', by: 'user', turn: 1, target: 'a@1', role: 'term0', text: 'x' })).toBe(false);
   });
 });

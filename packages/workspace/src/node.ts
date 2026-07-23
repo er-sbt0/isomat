@@ -21,7 +21,7 @@ import { QuickJSHost, isolate } from '@isomat/sandbox';
 import { newNodeContext } from '@isomat/sandbox/node';
 import type { ExecutableAct, WorkspaceLog } from './act.js';
 import { foldLog } from './fold.js';
-import type { FoldHooks, FoldOutcome } from './fold.js';
+import type { FoldHooks, FoldOutcome, SpanResolver } from './fold.js';
 import type { TryFold } from './commit.js';
 
 export interface FoldEnv {
@@ -39,7 +39,7 @@ export interface FoldEnv {
  * `lintGate: false`: M1 hand-authors act source in tests; the gate is the
  * compile hook's job (M2), not the fold's.
  */
-export async function createFoldEnv(): Promise<FoldEnv> {
+export async function createFoldEnv(resolveSpan?: SpanResolver): Promise<FoldEnv> {
   const world = createWorld();
   const stage = createStage(world);
   const scope = createNativeScope(world, stage);
@@ -51,6 +51,10 @@ export async function createFoldEnv(): Promise<FoldEnv> {
     execute: (act: ExecutableAct) => host.run(isolate(act.js)),
     scene: (): ReadonlyMap<Id, Handle> => sceneIndex(stage),
     graph: (): CorrespondenceGraph => world.graph,
+    // The edit-span re-emit is a parse-layer capability (M4). `workspace` is
+    // upstream of `@isomat/parse`, so it is injected by the caller; the pure
+    // workspace fold leaves it undefined and rejects edit-span acts.
+    ...(resolveSpan ? { resolveSpan } : {}),
   };
   // NOTE: the returned Workspace keeps reading these handles after fold returns
   // (a derived's `.value` re-invokes a guest closure the bridge retains), so the
@@ -63,8 +67,8 @@ export async function createFoldEnv(): Promise<FoldEnv> {
  * Fold a log into a `Workspace` through a fresh sandbox. The headline entry
  * point: `fold(log): Promise<Workspace-or-failure>`.
  */
-export async function fold(log: WorkspaceLog): Promise<FoldOutcome> {
-  const env = await createFoldEnv();
+export async function fold(log: WorkspaceLog, resolveSpan?: SpanResolver): Promise<FoldOutcome> {
+  const env = await createFoldEnv(resolveSpan);
   return foldLog(log, env.hooks);
 }
 
@@ -73,3 +77,10 @@ export async function fold(log: WorkspaceLog): Promise<FoldOutcome> {
  * throwaway and report only whether it stood. Adapts `fold` to `TryFold`.
  */
 export const tryFold: TryFold = (candidate: WorkspaceLog) => fold(candidate);
+
+/**
+ * A `TryFold` bound to a span resolver — the commit-time candidate fold for a
+ * log containing `edit-span` acts (M4). The pure `tryFold` above cannot resolve
+ * an edit-span; the parse package builds one of these with its resolver.
+ */
+export const tryFoldWith = (resolveSpan: SpanResolver): TryFold => (candidate) => fold(candidate, resolveSpan);

@@ -165,6 +165,67 @@ export function toFragments(node: MathNode): FormulaFragment[] {
   return fragments;
 }
 
+// ─────────────────────────── source re-serialization ───────────────────────────
+
+function sourceChild(child: MathNode, parentPrec: number): string {
+  const inner = toSource(child);
+  return precedence(child) < parentPrec ? `(${inner})` : inner;
+}
+
+/**
+ * The expression SOURCE (mathjs input syntax), generated from the AST — the
+ * inverse of `parseToAst`, restricted to isomat's arithmetic grammar. NOT
+ * symbolic: a plain structural stringify (no simplify/rewrite), so it stays
+ * inside the no-CAS fence. M4's `edit-span` uses it to read one term's source,
+ * splice a replacement in, and hand the reassembled text back to `parseExpr`.
+ */
+export function toSource(node: MathNode): string {
+  switch (node.type) {
+    case 'ConstantNode':
+      return String((node as ConstantNode).value);
+    case 'SymbolNode':
+      return (node as SymbolNode).name;
+    case 'ParenthesisNode':
+      return `(${toSource((node as ParenthesisNode).content)})`;
+    case 'FunctionNode': {
+      const name = (node as FunctionNode).fn.name;
+      if (!FUNCTIONS[name]) throw new Error(unsupported(node));
+      return `${name}(${(node as FunctionNode).args.map(toSource).join(', ')})`;
+    }
+    case 'OperatorNode': {
+      const o = node as OperatorNode;
+      if (o.fn === 'unaryMinus') return `-${sourceChild(o.args[0]!, 35)}`;
+      const [l, r] = [o.args[0]!, o.args[1]!];
+      switch (o.op) {
+        case '+':
+          return `${sourceChild(l, 20)} + ${sourceChild(r, 20)}`;
+        case '-':
+          return `${sourceChild(l, 20)} - ${sourceChild(r, 20)}`;
+        case '*':
+          return `${sourceChild(l, 30)} * ${sourceChild(r, 30)}`;
+        case '/':
+          return `${sourceChild(l, 30)} / ${sourceChild(r, 30)}`;
+        case '^':
+          return `${sourceChild(l, 41)}^${sourceChild(r, 41)}`;
+        default:
+          throw new Error(unsupported(node));
+      }
+    }
+    default:
+      throw new Error(unsupported(node));
+  }
+}
+
+/**
+ * The top-level additive terms as SIGNED SOURCE strings — the source-side twin
+ * of `toFragments` (which yields display TeX). `term0`/`term1`/… address the
+ * same spans; each carries the leading `+`/`-` and its term's source text, so
+ * M4's `edit-span` can replace one term and rejoin the expression.
+ */
+export function additiveTermSources(node: MathNode): ReadonlyArray<{ sign: '+' | '-'; src: string }> {
+  return additiveTerms(node).map((t) => ({ sign: t.sign, src: toSource(t.term) }));
+}
+
 // ─────────────────────────────── JS emission ───────────────────────────────
 
 /**

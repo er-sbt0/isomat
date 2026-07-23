@@ -26,7 +26,24 @@
  */
 
 import type { CorrespondenceGraph, Handle, Id } from '@isomat/core';
-import type { ExecutableAct, Position, WorkspaceAct, WorkspaceLog } from './act.js';
+import type { ExecutableAct, ExprMeta, Position, WorkspaceAct, WorkspaceLog } from './act.js';
+
+/**
+ * The edit-span re-emit, injected (M4). `workspace` sits UPSTREAM of
+ * `@isomat/parse` on the DAG, so the fold cannot re-parse an expression itself.
+ * The parse package supplies this: given an introduce's `ExprMeta` plus a span
+ * edit, it splices the new term source into the addressed `role`, re-parses the
+ * whole expression, and re-emits the object's `js` under the SAME id. Absent in
+ * the pure-workspace fold — an `edit-span` folded without a resolver is a FAILURE.
+ */
+export type SpanResolver = (meta: ExprMeta, role: string, text: string) => ResolvedExpr;
+
+/** What a `SpanResolver` returns: the re-emitted js, its source, and updated meta. */
+export interface ResolvedExpr {
+  readonly js: string;
+  readonly source: string;
+  readonly meta: ExprMeta;
+}
 
 /**
  * The projection a folded log yields: the live objects the workspace offers,
@@ -63,6 +80,12 @@ export interface FoldHooks {
   readonly execute: (act: ExecutableAct) => void;
   readonly scene: () => ReadonlyMap<Id, Handle>;
   readonly graph: () => CorrespondenceGraph;
+  /**
+   * The M4 edit-span re-emit (parse-layer, injected). Present only in the
+   * parse-enabled fold; a pure-workspace fold leaves it undefined and rejects
+   * any `edit-span` act. See `SpanResolver`.
+   */
+  readonly resolveSpan?: SpanResolver;
 }
 
 /** Which act broke the fold, and how — the position, not merely that one did. */
@@ -77,10 +100,65 @@ export type FoldOutcome =
   | { readonly ok: false; readonly failure: FoldFailure };
 
 /**
+ * The final resolved definition of one introduced id — the js the fold runs at
+ * that id's defining position (pass 2), plus what a later `edit-span` needs to
+ * edit further. Seeded by an `introduce`, then mutated by any `replace` /
+ * `edit-span` targeting it (M4 Stage B).
+ */
+interface Definition {
+  js: string;
+  source?: string;
+  meta?: ExprMeta;
+}
+
+/**
  * Fold a log, in order, against a freshly built world (the caller's hooks own
  * the world). Returns the `Workspace` projection, or the first failure.
+ *
+ * ## Two passes — `replace` / `edit-span` supersede, never re-mint (M4, Option B)
+ *
+ * A second declaration of an already-minted explicit id collides with the
+ * single-assignment id registry (`core/identity.ts`, by design), and the scene
+ * is first-wins, so `replace` / `edit-span` CANNOT append a fresh declaration of
+ * their target. Instead the fold resolves in two passes:
+ *
+ *  1. RESOLVE — walk the log building `id → Definition`. An `introduce`/`author`
+ *     seeds a defining id; a `replace` overwrites its target's `js`; an
+ *     `edit-span` re-parses and re-emits it (via the injected `resolveSpan`).
+ *     Successive edits compose. A `replace`/`edit-span` whose target no earlier
+ *     `introduce` defined is a FAILURE — so a defining act always precedes its
+ *     superseders and the pass-2 run is order-valid.
+ *  2. WALK — execute in order, but at each `introduce` run its FINAL resolved js
+ *     (so the id is minted exactly once, with its last definition); a
+ *     `replace`/`edit-span` is then a NO-OP (its effect folded in at pass 1).
+ *
+ * Result: the id is stable (minted once) and every dependent — all necessarily
+ * authored AFTER it — binds to that single handle and recomputes against the
+ * final definition. Last-write-wins keeps the fold deterministic. This is the
+ * same collapse M4 Stage D's checkpoint compaction reuses.
+ *
+ * ## Documented limitations (M4 Stage B, accepted)
+ *
+ *  - Only `introduce` acts carry a statically-known defining id, so a
+ *    `replace`/`edit-span` may only target an INTRODUCED object — not one an
+ *    `author` act minted (whose id is unknown until execution and whose act may
+ *    mint several objects, so substituting its source is unsafe).
+ *  - A `replace`/`edit-span`'s resolved source runs at the target's ORIGINAL
+ *    defining position, so it may reference only what existed there (the target's
+ *    original dependency scope). Referencing a newer object surfaces as a
+ *    FoldFailure (a `byId` miss), not silent misbehavior.
+ *  - A `set-input` applied to a target BEFORE it is replaced is discarded — the
+ *    replace's fresh definition supersedes it. In practice `set-input` targets
+ *    params while `replace`/`edit-span` target formula objects, so they do not
+ *    collide.
  */
 export function foldLog(log: WorkspaceLog, hooks: FoldHooks): FoldOutcome {
+  // ── Pass 1: resolve (supersede in place; never a second mint) ──
+  const defs = new Map<Id, Definition>();
+  const resolveFailure = resolvePass(log, hooks, defs);
+  if (resolveFailure) return { ok: false, failure: resolveFailure };
+
+  // ── Pass 2: walk & execute ──
   const layout = new Map<Id, Position>();
   const retired = new Set<Id>();
 
@@ -92,7 +170,11 @@ export function foldLog(log: WorkspaceLog, hooks: FoldHooks): FoldOutcome {
           hooks.execute(act);
           break;
         case 'introduce': {
-          hooks.execute(act);
+          // Run the FINAL resolved js (== act.js unless a replace/edit-span
+          // superseded it): the object is minted ONCE, here, with its last
+          // definition. `defs` was seeded for every introduce in pass 1.
+          const def = defs.get(act.id);
+          hooks.execute({ ...act, js: def ? def.js : act.js });
           // The stable-id contract, checked: the source PROMISED to mint an
           // object with this id. If it did not, a later `M.byId(act.id)` would
           // fail somewhere unrelated — reject here, where the act is named.
@@ -132,6 +214,11 @@ export function foldLog(log: WorkspaceLog, hooks: FoldHooks): FoldOutcome {
           }
           retired.add(act.target);
           break;
+        case 'replace':
+        case 'edit-span':
+          // No-op: its effect was folded into the target's defining `introduce`
+          // in pass 1 (Option B — supersede in place, never a second mint).
+          break;
       }
     } catch (err) {
       return {
@@ -145,6 +232,73 @@ export function foldLog(log: WorkspaceLog, hooks: FoldHooks): FoldOutcome {
     ok: true,
     workspace: { objects: hooks.scene(), layout, graph: hooks.graph(), retired },
   };
+}
+
+/**
+ * Pass 1: walk the log in order, resolving each introduced id to its FINAL
+ * definition. `introduce` seeds a definition; `replace` overwrites its target's
+ * js; `edit-span` re-parses and re-emits it through the injected `resolveSpan`.
+ * A `replace`/`edit-span` targeting an id no earlier `introduce` defined — or an
+ * `edit-span` on an object with no parse metadata, or without a resolver — is a
+ * FoldFailure, at that act's position. `author`/`set-input`/`move`/`retire`
+ * define nothing to resolve.
+ */
+function resolvePass(log: WorkspaceLog, hooks: FoldHooks, defs: Map<Id, Definition>): FoldFailure | null {
+  for (let index = 0; index < log.length; index += 1) {
+    const act = log[index]!;
+    try {
+      switch (act.kind) {
+        case 'introduce':
+          defs.set(act.id, { js: act.js, source: act.source, meta: act.expr });
+          break;
+        case 'replace': {
+          const def = requireDef(defs, act.target, 'replace');
+          def.js = act.js;
+          if (act.source !== undefined) def.source = act.source;
+          // Hand-provided js carries no re-parseable expression: a later
+          // edit-span on this target now fails cleanly rather than misparsing.
+          def.meta = undefined;
+          break;
+        }
+        case 'edit-span': {
+          const def = requireDef(defs, act.target, 'edit-span');
+          if (!def.meta) {
+            throw new Error(
+              `edit-span names "${act.target}", which carries no parse metadata — only an object ` +
+                `introduced from a parsed expression (introduceExpr) can be span-edited, and not one ` +
+                `a plain replace has since redefined.`,
+            );
+          }
+          if (!hooks.resolveSpan) {
+            throw new Error(
+              `edit-span requires the parse-enabled fold: no span resolver was provided. Fold through ` +
+                `@isomat/parse's entry (which wires resolveSpan) to edit a parsed expression.`,
+            );
+          }
+          const resolved = hooks.resolveSpan(def.meta, act.role, act.text);
+          def.js = resolved.js;
+          def.source = resolved.source;
+          def.meta = resolved.meta;
+          break;
+        }
+      }
+    } catch (err) {
+      return { index, kind: act.kind, message: err instanceof Error ? err.message : String(err) };
+    }
+  }
+  return null;
+}
+
+/** A `replace`/`edit-span` may only target an id an EARLIER `introduce` defined. */
+function requireDef(defs: Map<Id, Definition>, target: Id, verb: string): Definition {
+  const def = defs.get(target);
+  if (!def) {
+    throw new Error(
+      `${verb} names "${target}", which no earlier introduce defined. A ${verb} may only re-mint an ` +
+        `object an introduce act created before it in the log.`,
+    );
+  }
+  return def;
 }
 
 /**

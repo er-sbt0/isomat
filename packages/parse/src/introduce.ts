@@ -15,7 +15,7 @@
  */
 
 import type { Id } from '@isomat/core';
-import type { Author, IntroduceAct, Position } from '@isomat/workspace';
+import type { Author, ExprMeta, IntroduceAct, Position } from '@isomat/workspace';
 import { parseExpr } from './expr.js';
 
 export interface IntroduceExprOpts {
@@ -80,6 +80,19 @@ export function introduceExpr(opts: IntroduceExprOpts): IntroduceAct {
     `{ domain: [${lo}, ${hi}], label: ${JSON.stringify(label)}, id: ${JSON.stringify(opts.id)} });`;
   const js = [...decls, plotLine].join('\n');
 
+  // The parse context M4's `edit-span` re-parses and re-emits from. Carrying it
+  // on the act (plain data — `workspace` is upstream of `parse`) is what lets a
+  // later span edit reproduce THIS object under the same id from edited source.
+  const expr: ExprMeta = {
+    text: opts.text,
+    at: opts.at,
+    id: opts.id,
+    domain: [lo, hi],
+    indepVar,
+    bindings,
+    ...(opts.label !== undefined ? { label: opts.label } : {}),
+  };
+
   return {
     kind: 'introduce',
     js,
@@ -88,6 +101,7 @@ export function introduceExpr(opts: IntroduceExprOpts): IntroduceAct {
     source: opts.text,
     at: opts.at,
     id: opts.id,
+    expr,
     by: opts.by ?? 'user',
     turn: opts.turn ?? 0,
   };

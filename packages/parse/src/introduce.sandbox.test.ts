@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { fold } from '@isomat/workspace/node';
 import type { WorkspaceLog } from '@isomat/workspace';
 import { introduceExpr } from './introduce.js';
+import { resolveSpan } from './editspan.js';
 
 /** Turn 0: a live parameter `a` with a known stable id to bind against. */
 const authorA: WorkspaceLog[number] = {
@@ -96,5 +97,77 @@ describe('introduceExpr → fold → a live plotted object', () => {
     });
     const log: WorkspaceLog = [authorA, intro];
     expect(await sampleAt(log, 'line', 4)).toBe(4); // a=1 → 1*4
+  });
+});
+
+describe('edit-span → re-parse → re-emit under the same id (roadmap M4 Stage B)', () => {
+  const num = (log: WorkspaceLog, id: string) =>
+    fold(log, resolveSpan).then((w) => {
+      if (!w.ok) throw new Error(`did not fold: ${JSON.stringify((w as { failure: unknown }).failure)}`);
+      return (w.workspace.objects.get(id) as unknown as { value: number }).value;
+    });
+  const sample = (log: WorkspaceLog, id: string, x: number) =>
+    fold(log, resolveSpan).then((w) => {
+      if (!w.ok) throw new Error(`did not fold: ${JSON.stringify((w as { failure: unknown }).failure)}`);
+      return (w.workspace.objects.get(id) as unknown as { at(x: number): number }).at(x);
+    });
+
+  /** curve = x^2 + a*x (term0 = x^2, term1 = a*x), bound to the live param `a`. */
+  const curve = () =>
+    introduceExpr({ text: 'x^2 + a*x', at: { x: 0, y: 0 }, id: 'curve', domain: [-2, 2], bindings: { a: 'a' }, turn: 1 });
+
+  /** A dependent authored off the curve by id — it must reflect the edited definition. */
+  const dependent: WorkspaceLog[number] = {
+    kind: 'author',
+    js: 'const c = byId("curve"); derive(() => c.at(2), { label: "d", id: "d" });',
+    by: 'copilot',
+    turn: 2,
+  };
+
+  it('edits term0 (x^2 → x^3): the curve and its dependent recompute; id stable', async () => {
+    const base: WorkspaceLog = [authorA, curve(), dependent];
+    const edited: WorkspaceLog = [
+      ...base,
+      { kind: 'edit-span', target: 'curve', role: 'term0', text: 'x^3', by: 'user', turn: 3 },
+    ];
+
+    // before: x^2 + a*x at x=2, a=1 → 4 + 2 = 6
+    expect(await sample(base, 'curve', 2)).toBe(6);
+    expect(await num(base, 'd')).toBe(6);
+
+    // after editing term0 to x^3: x^3 + a*x at x=2, a=1 → 8 + 2 = 10
+    expect(await sample(edited, 'curve', 2)).toBe(10);
+    // the DEPENDENT recomputed against the new definition, too
+    expect(await num(edited, 'd')).toBe(10);
+
+    // the object kept its id across the edit — the id-stability watch
+    const w = await fold(edited, resolveSpan);
+    expect(w.ok && w.workspace.objects.has('curve')).toBe(true);
+    if (w.ok) expect(w.workspace.layout.get('curve')).toEqual({ x: 0, y: 0 });
+  });
+
+  it('composes two edit-spans on the same object (term0 then term1); id stable', async () => {
+    const log: WorkspaceLog = [
+      authorA,
+      curve(),
+      { kind: 'edit-span', target: 'curve', role: 'term0', text: 'x^3', by: 'user', turn: 3 },
+      { kind: 'edit-span', target: 'curve', role: 'term1', text: '2*a*x', by: 'user', turn: 4 },
+    ];
+    // curve is now x^3 + 2*a*x; at x=2, a=1 → 8 + 2*1*2 = 12
+    expect(await sample(log, 'curve', 2)).toBe(12);
+
+    const w = await fold(log, resolveSpan);
+    expect(w.ok && w.workspace.objects.has('curve')).toBe(true);
+  });
+
+  it('an edit-span with a malformed role is a FoldFailure, prior definition untouched', async () => {
+    const log: WorkspaceLog = [
+      authorA,
+      curve(),
+      { kind: 'edit-span', target: 'curve', role: 'term9', text: 'x', by: 'user', turn: 3 },
+    ];
+    const w = await fold(log, resolveSpan);
+    expect(w.ok).toBe(false);
+    if (!w.ok) expect(w.failure.kind).toBe('edit-span');
   });
 });

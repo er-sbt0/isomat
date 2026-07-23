@@ -22,6 +22,9 @@ export type {
   SetInputAct,
   MoveAct,
   RetireAct,
+  ReplaceAct,
+  EditSpanAct,
+  ExprMeta,
   WorkspaceAct,
   WorkspaceLog,
   ExecutableAct,
@@ -29,7 +32,15 @@ export type {
 export { isExecutable } from './act.js';
 
 export { foldLog } from './fold.js';
-export type { Workspace, FoldHooks, FoldFailure, FoldOutcome, Settable } from './fold.js';
+export type {
+  Workspace,
+  FoldHooks,
+  FoldFailure,
+  FoldOutcome,
+  Settable,
+  SpanResolver,
+  ResolvedExpr,
+} from './fold.js';
 
 export { commit, coalesce } from './commit.js';
 export type { CommitResult, TryFold } from './commit.js';

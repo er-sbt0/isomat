@@ -167,6 +167,65 @@ describe('a hand-built co-edit log, folded through QuickJS', () => {
     expect(still.ok).toBe(true);
   });
 
+  it('a replace re-mints the target under its own id; the dependent recomputes; id stable (M4 Stage B)', async () => {
+    // replace a@1's definition (value 2 → 4) under the SAME id. y@2 = a² depends on it.
+    const REPLACE_A: WorkspaceAct = {
+      kind: 'replace',
+      by: 'copilot',
+      turn: 3,
+      target: 'a@1',
+      js: 'const a = param("a", 4, { range: [-5, 5], id: "a@1" });',
+    };
+    const out = await fold([INTRODUCE_A, AUTHOR_Y, REPLACE_A]);
+    expect(out.ok ? 'ok' : out.failure.message).toBe('ok');
+    if (!out.ok) return;
+    const { objects } = out.workspace;
+
+    // the id is UNCHANGED — the object was re-minted, not re-numbered
+    expect(objects.has('a@1')).toBe(true);
+    // the object carries its NEW definition…
+    expect(numAt(objects, 'a@1')).toBe(4);
+    // …and the dependent recomputed against it: 4² = 16 (was 2² = 4 before the replace)
+    expect(numAt(objects, 'y@2')).toBe(16);
+  });
+
+  it('a throwing replace leaves the prior log + live scene intact (one transaction)', async () => {
+    const log: WorkspaceLog = [INTRODUCE_A, AUTHOR_Y];
+    // the replace's source re-mints a@1 fine, then references an object that does
+    // not exist at a@1's defining position — it throws, so nothing is applied.
+    const BAD: WorkspaceAct = {
+      kind: 'replace',
+      by: 'copilot',
+      turn: 3,
+      target: 'a@1',
+      js: 'const a = param("a", 4, { range: [-5, 5], id: "a@1" });\nbyId("nope@9");',
+    };
+    const committed = await commit(log, BAD, tryFold);
+    expect(committed.ok).toBe(false);
+    expect(committed.log).toBe(log); // same reference — nothing half-applied
+    if (!committed.ok) expect(committed.errors[0]).toContain('nope@9');
+
+    // the prior log still folds cleanly, with a@1's ORIGINAL definition (value 2)
+    const still = await fold(committed.log);
+    expect(still.ok).toBe(true);
+    if (still.ok) expect(numAt(still.workspace.objects, 'a@1')).toBe(2);
+  });
+
+  it('a replace on an id no introduce defined is a FAILURE (prior log intact)', async () => {
+    const log: WorkspaceLog = [INTRODUCE_A, AUTHOR_Y];
+    const BAD: WorkspaceAct = {
+      kind: 'replace',
+      by: 'user',
+      turn: 3,
+      target: 'ghost@9',
+      js: 'param("g", 1, { range: [-1, 1], id: "ghost@9" });',
+    };
+    const committed = await commit(log, BAD, tryFold);
+    expect(committed.ok).toBe(false);
+    expect(committed.log).toBe(log);
+    if (!committed.ok) expect(committed.errors[0]).toContain('ghost@9');
+  });
+
   it('re-folding the same log yields identical ids (the cassette property, criterion 4)', async () => {
     const log: WorkspaceLog = [INTRODUCE_A, AUTHOR_Y, setA(2)];
     const a = await fold(log);
