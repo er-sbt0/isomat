@@ -47,5 +47,5 @@ export type { CommitResult, TryFold } from './commit.js';
 
 export { SessionIds } from './session.js';
 
-export { noCheckpoint } from './checkpoint.js';
-export type { CheckpointPolicy } from './checkpoint.js';
+export { noCheckpoint, everyNActs } from './checkpoint.js';
+export type { CheckpointPolicy, EveryNActsOptions } from './checkpoint.js';

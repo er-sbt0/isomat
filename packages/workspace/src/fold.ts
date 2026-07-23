@@ -104,8 +104,12 @@ export type FoldOutcome =
  * that id's defining position (pass 2), plus what a later `edit-span` needs to
  * edit further. Seeded by an `introduce`, then mutated by any `replace` /
  * `edit-span` targeting it (M4 Stage B).
+ *
+ * Exported for M4 Stage D: checkpoint compaction reuses the SAME resolve pass to
+ * collapse a prefix's `replace`/`edit-span` churn into each introduced id's FINAL
+ * `js` before synthesizing one id-preserving act (see `resolveDefinitions`).
  */
-interface Definition {
+export interface Definition {
   js: string;
   source?: string;
   meta?: ExprMeta;
@@ -243,7 +247,11 @@ export function foldLog(log: WorkspaceLog, hooks: FoldHooks): FoldOutcome {
  * FoldFailure, at that act's position. `author`/`set-input`/`move`/`retire`
  * define nothing to resolve.
  */
-function resolvePass(log: WorkspaceLog, hooks: FoldHooks, defs: Map<Id, Definition>): FoldFailure | null {
+function resolvePass(
+  log: WorkspaceLog,
+  hooks: { readonly resolveSpan?: SpanResolver },
+  defs: Map<Id, Definition>,
+): FoldFailure | null {
   for (let index = 0; index < log.length; index += 1) {
     const act = log[index]!;
     try {
@@ -287,6 +295,27 @@ function resolvePass(log: WorkspaceLog, hooks: FoldHooks, defs: Map<Id, Definiti
     }
   }
   return null;
+}
+
+/** The successful shape of `resolveDefinitions`: the final def per introduced id. */
+export type ResolvedDefs =
+  | { readonly ok: true; readonly defs: ReadonlyMap<Id, Definition> }
+  | { readonly ok: false; readonly failure: FoldFailure };
+
+/**
+ * Run pass 1 (resolve) alone, exposing the `id → Definition` map — the checkpoint
+ * seam (M4 Stage D). `foldLog` runs this internally then walks/executes; a
+ * compaction only needs the RESOLVED definitions (each introduced id collapsed to
+ * its FINAL `js`, with `replace`/`edit-span` folded in) to synthesize one
+ * id-preserving act. `resolveSpan` is required only if the log carries an
+ * `edit-span` (same rule as the fold); a `replace`-only or plain log resolves
+ * without one.
+ */
+export function resolveDefinitions(log: WorkspaceLog, resolveSpan?: SpanResolver): ResolvedDefs {
+  const defs = new Map<Id, Definition>();
+  const failure = resolvePass(log, { resolveSpan }, defs);
+  if (failure) return { ok: false, failure };
+  return { ok: true, defs };
 }
 
 /** A `replace`/`edit-span` may only target an id an EARLIER `introduce` defined. */
