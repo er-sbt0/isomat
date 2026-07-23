@@ -79,6 +79,15 @@ const WORKSPACE_FACING = ['substrate', 'sandbox', 'objects', 'workspace', 'copil
  */
 const NODE_LOADERS = ['@isomat/sandbox/node', '@isomat/workspace/node', 'quickjs-emscripten'];
 
+/**
+ * The billed/SDK path (M5d). `@isomat/copilot/anthropic` is kept off the copilot
+ * barrel so the Anthropic SDK never enters a browser bundle — importing it from
+ * the client-only web app would ship a Node-shaped HTTP client to the page and
+ * invite putting an API key in client-side code. Replay (`CassetteClient`) is
+ * SDK-free and stays freely importable.
+ */
+const BILLED_PATHS = ['@anthropic-ai/sdk', '@isomat/copilot/anthropic'];
+
 function sourceFiles(pkgSrc: string): string[] {
   const out: string[] = [];
   const walk = (dir: string) => {
@@ -153,6 +162,33 @@ describe('import boundary — the Stabilize fence', () => {
         // Exact or subpath match — `@isomat/sandbox/node` must fail while
         // `@isomat/sandbox/browser` and `@isomat/sandbox` pass.
         if (NODE_LOADERS.some((bad) => spec === bad || spec.startsWith(`${bad}/`))) {
+          problems.push(`${file.slice(ROOT.length + 1)} imports "${spec}"`);
+        }
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+
+  it('the web app never imports the Anthropic SDK or the billed client (M5d)', () => {
+    const problems: string[] = [];
+    for (const file of sourceFiles(join(ROOT, 'packages/web/src'))) {
+      for (const spec of importSpecifiers(file)) {
+        if (BILLED_PATHS.some((bad) => spec === bad || spec.startsWith(`${bad}/`))) {
+          problems.push(`${file.slice(ROOT.length + 1)} imports "${spec}"`);
+        }
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+
+  it('the copilot BARREL never reaches the Anthropic SDK — only the ./anthropic subpath may', () => {
+    // If the barrel imported it, every consumer of `@isomat/copilot` would pull
+    // the SDK in, and the fence above would be unenforceable in practice.
+    const problems: string[] = [];
+    for (const file of sourceFiles(join(ROOT, 'packages/copilot/src'))) {
+      if (file.endsWith('/anthropic.ts')) continue; // the one permitted door
+      for (const spec of importSpecifiers(file)) {
+        if (spec === '@anthropic-ai/sdk' || spec.startsWith('@anthropic-ai/sdk/')) {
           problems.push(`${file.slice(ROOT.length + 1)} imports "${spec}"`);
         }
       }

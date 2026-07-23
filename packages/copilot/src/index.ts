@@ -61,3 +61,10 @@ export type {
   ToolResultMsg,
   Evidence,
 } from './client.js';
+
+// ── M5d: cassettes — record once (billed), replay free forever ──
+// `AnthropicClient` is deliberately NOT here: it imports the Anthropic SDK, so
+// it lives at `@isomat/copilot/anthropic` and stays out of the browser bundle.
+// Replay imports nothing but the seam's types, so it is free and browser-safe.
+export { CassetteClient, RecordingClient, fingerprint } from './cassette.js';
+export type { Cassette, CassetteEntry, RequestFingerprint, ReplayOpts } from './cassette.js';
