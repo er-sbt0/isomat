@@ -76,8 +76,12 @@ math-ai's lesson concepts), **M2** (copilot — **M2a** executor ↔ workspace s
 (the `parse` front door — mathjs walled to `parse`-only, `introduceExpr` → sandbox
 fold, no-CAS fence), and **M4** (spatial verbs `move`/`retire`/`replace`/`edit-span`
 + real checkpoint compaction + `scopedManifest`) are all **DONE and committed**.
-Green: typecheck 8/8, **403 tests**. Working tree clean. The one billed real-Claude
-session is deferred to M5 (flagship cassette); everything so far runs free.
+**M5** (probe toolset + convergence — **M5a** `plot`/`tabulate`/`numericEquivalence`/
+`numericRoot`, **M5b** the canonical *"is d/dx of f = g?"* sampled-evidence flow,
+**M5c** the 113-act both-authors symmetric-log hammer) is **headless-half DONE and
+committed**; only **M5d** (the billed real-Claude flagship cassette) remains, GATED on
+explicit approval. Green: typecheck 8/8, **421 tests**. Working tree clean. No API key
+/ SDK / billed path exists in the repo today — everything so far runs free.
 
 **M4 shape to know:** `fold(log)` is now **two-pass** — a resolve pass collapses each
 introduced id to its FINAL definition (so `replace`/`edit-span` supersede in place,
@@ -95,15 +99,15 @@ replaying each object's **source** (guest closures aren't serializable) + a boun
 - `docs/m4-plan.md` — the executed file-level M4 plan (spatial verbs + manifest).
 - `docs/stabilize-plan.md` — the executed file-level Stabilize demolition plan.
 
-**NEXT: M5** — integrated co-edit workspace + probe toolset (the Phase-1 goal).
-Grow the loop's tools (`plot`/`tabulate`/`numeric-equivalence`/`numeric-root`, each
-returning typed evidence, none certifying); the canonical *"is d/dx of this equal to
-that?"* → LLM derivative → numeric probe → **`sampled`** evidence path end-to-end;
-hammer the symmetric log (100+ interleaved acts from both authors through one
-foldable log). **Exit:** a headless integration test drives a full multi-object
-co-edit session (deterministic, no half-apply, `M.byId` robust) + the one billed
-`record`-style session captured as the flagship cassette (M2's deferred real-Claude
-session lands here). See roadmap M5. Ask before running the billed path.
+**NEXT: M5d** — the one remaining M5 step, **BILLED and GATED**. M5a–c (the probe
+toolset + the canonical sampled-evidence flow + the symmetric-log hammer) are DONE and
+committed; the headless Phase-1 exit is met. M5d is the flagship real-Claude cassette:
+a real `AnthropicClient` behind the existing `ModelClient` seam + a cassette record/
+replay harness (the free `M5d-code` half is buildable without a key; a fixture replay
+proves the seam), then ONE billed `record`-style session captured as the cassette
+(replayed free forever after). **No API key / SDK / billed path exists in the repo —
+building the SDK client and running the session both need explicit user approval.** See
+roadmap M5 + `docs/m5-plan.md` M5d. After M5: Phase 2 (UI, deferred by decision #4).
 
 ## Locked decisions
 - **No CAS.** The LLM reasons (fallibly); the engine makes math manipulable/visible/

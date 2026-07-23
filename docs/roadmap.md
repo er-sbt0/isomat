@@ -293,12 +293,37 @@ subagents against `docs/m4-plan.md`, one stage per commit, each ending green.
   re-emitted through parse). Checkpoint trigger policy chosen: **N acts** (byte
   budget can layer on later).
 
-### M5 — Integrated co-edit workspace + probe toolset (Phase-1 goal)
+### M5 — Integrated co-edit workspace + probe toolset (Phase-1 goal) — headless half ✅ DONE (2026-07-23); billed cassette (M5d) GATED
 Everything converges; the spatial co-edit engine is real, headless, and tested.
+Executed by subagents against `docs/m5-plan.md`, one stage per commit.
 - Grow the loop's tools: `plot`, `tabulate`, `numeric-equivalence`, `numeric-root` — each returns typed evidence, none certify.
 - Canonical interaction end-to-end: *"is d/dx of this equal to that?"* → LLM derivative → numeric probe at sampled points → **`sampled`** evidence, never "proven."
 - Hammer the symmetric log: 100+ interleaved acts from both authors (user introduce/drag/edit + copilot probe/author/arrange) through one foldable log.
 - **Exit:** a headless integration test drives a full multi-object co-edit session — deterministic, no half-apply, `M.byId` robust; one billed `record`-style session captured as the flagship cassette.
+
+**M5 outcome — the headless half (M5a–c) is DONE and committed (421 tests green,
+typecheck 8/8); the billed flagship cassette (M5d) is the one remaining GATED step.**
+- **M5a** (`72e2044`) probe toolset — `plot`/`tabulate`/`numericEquivalence`/`numericRoot`,
+  each returning typed `sampled` evidence, none certifying. `plot(text, domain)` is the
+  parse-gated write (model TEXT → `introduceExpr` → live `fn`); the other three sample
+  objects' own `at()` closures. No CAS — the LLM supplies the derivative, the engine
+  only samples. `groundedEvidence` grounds all four as `sampled`. camelCase tool names
+  (roadmap's kebab is the concept). `copilot → parse` dep added (acyclic).
+- **M5b** (`7377dbc`) canonical flow — the *"is d/dx of f equal to g?"* interaction
+  end-to-end via `ScriptedClient`: model plots its derivative TEXT, samples it against
+  `g` with `numericEquivalence`, answers `sampled` (never "proven"). The load-bearing
+  negative: a wrong derivative (`2*x+1`) is CAUGHT — the probe returns
+  `equivalent:false`, `maxAbsDiff≈1`, and that finding provably fed back before the
+  answer. The engine cannot launder a wrong opinion into a proof.
+- **M5c** (`bb3d8fc`) symmetric-log hammer — a 113-act both-authors session (15 objects,
+  every verb + probe) folds deterministically; no half-apply (rejected acts leave the
+  log reference intact); `byId` robust; ids stable under `edit-span`/`replace`; an
+  `everyNActs(50)` checkpoint (M4d) over the long log folds to the same workspace.
+- **M5d — BILLED, GATED (not started; needs explicit user approval + an API key).** A
+  real `AnthropicClient` behind the `ModelClient` seam + a cassette record/replay
+  harness + one captured flagship cassette. Verified absent today: no SDK, no key, no
+  billed path exists. Free `M5d-code` (harness + replay over a fixture) is buildable
+  without a key; the one billed `record` session is the only paid step in the repo.
 
 ## Phase 2 — deferred (revisit when M5 lands)
 - Decide the UI/app stack (decision #4).
